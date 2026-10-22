@@ -18,6 +18,18 @@ The LG290P computes the RTK solution. The Pico handles everything around it:
 | TXD | GP1 (UART0 RX) | NMEA out of the receiver |
 | RTK | GP2 | fix status (optional) |
 
+**Alternative board: ZJI RF "LG290P Full Freq Dev" (AliExpress).** It carries two 6-pin rows, EN · GND · TX · RX · VCC · PPS, one row for each of the LG290P's two UARTs.
+
+- Use the row marked TX0/RX0 (or TX1/RX1):
+  - VCC → VSYS (5 V)
+  - GND → GND
+  - RX → GP0
+  - TX → GP1
+  - PPS → GP2 (optional)
+- Leave EN unconnected; it is pulled up on the board.
+- Before wiring, check with a meter that the TX pin idles at about 3.3 V.
+- Connect the antenna through the supplied u.FL–SMA pigtail.
+
 Optional parts:
 
 - **LEDs on GP14 (RTK) and GP15 (corrections)**, each through a 330 Ω resistor to GND.
