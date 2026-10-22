@@ -1,0 +1,87 @@
+// PicoRTK - RTK GNSS rover firmware for Raspberry Pi Pico 2 W + Quectel LG290P (Waveshare module)
+// RFSAT Ltd. The LG290P computes the RTK solution; the Pico fetches NTRIP corrections over Wi-Fi
+// (ordered sources with failover) and serves NMEA over Bluetooth SPP / BLE, USB and TCP.
+//
+// Core 0: Wi-Fi, Bluetooth, NTRIP, web page (everything that waits on the radio)
+// Core 1: receiver UART and USB bridge (tight loop, never blocked by the network)
+//
+// Board: Raspberry Pi Pico 2 W, IP stack "IPv4 + Bluetooth", flash "4MB (Sketch: 3MB, FS: 1MB)"
+
+#include "config.h"
+#include "net.h"
+#include "ntrip.h"
+#include "outputs.h"
+#include "receiver.h"
+#include "shared.h"
+#include "status.h"
+#include "util.h"
+#include "web.h"
+#include <LittleFS.h>
+#include <stdarg.h>
+
+static uint32_t bootCmdsAt = 0;
+
+void dbg(const char *fmt, ...)
+{
+    if (cfg.usb)
+        return; // USB carries the receiver stream
+    char buf[192];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    Serial.print(buf);
+}
+
+void setup()
+{
+    Serial.begin(115200);
+    receiverInitShared();
+    if (!LittleFS.begin())
+    {
+        LittleFS.format();
+        LittleFS.begin();
+    }
+    configLoad();
+    configReady = true; // core 1 may start the UART now
+
+    statusSetup();
+    outputsSetup();
+    netSetup();
+    webSetup();
+    ntripSetup();
+    bootCmdsAt = millis() + 3000; // let the receiver boot first
+}
+
+static void sendBootCommands()
+{
+    for (int i = 0; i < CFG_MAX_BOOTCMDS; i++)
+    {
+        if (!cfg.bootCmd[i].length())
+            continue;
+        char out[140];
+        size_t n = nmeaFinish(cfg.bootCmd[i].c_str(), out, sizeof(out));
+        if (n)
+            cmdToRx.write((const uint8_t *)out, n);
+    }
+}
+
+void loop()
+{
+    netLoop();
+    bool up = netUp();
+    outputsNetworkUp(up);
+    webLoop();
+    ntripLoop(up);
+    outputsLoop(ntripStreaming());
+    statusLoop();
+    if (bootCmdsAt && (int32_t)(millis() - bootCmdsAt) > 0)
+    {
+        bootCmdsAt = 0;
+        sendBootCommands();
+    }
+}
+
+void setup1() { receiverSetup1(); }
+
+void loop1() { receiverLoop1(); }

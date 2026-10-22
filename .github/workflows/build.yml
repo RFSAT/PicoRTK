@@ -1,0 +1,62 @@
+name: Build PicoRTK
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ "v*" ]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  ARDUINO_PICO_VERSION: 6.3.0
+  ARDUINOJSON_VERSION: 7.4.2
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Host unit tests
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Ifirmware/PicoRTK test/test_main.cpp \
+            firmware/PicoRTK/nmea.cpp firmware/PicoRTK/rtcm.cpp firmware/PicoRTK/selector.cpp firmware/PicoRTK/ntrip_proto.cpp -o /tmp/t
+          /tmp/t
+
+      - name: Protocol test against the fake caster
+        run: |
+          g++ -std=c++17 -Ifirmware/PicoRTK test/caster_e2e.cpp firmware/PicoRTK/ntrip_proto.cpp firmware/PicoRTK/rtcm.cpp -o /tmp/e2e
+          python3 tools/fake_caster.py --port 21010 & sleep 1
+          /tmp/e2e 21010 GOOD | tee /tmp/r1; grep -q "^Ok frames=[1-9]" /tmp/r1
+          /tmp/e2e 21010 NOPE | grep -q "^Sourcetable"
+          /tmp/e2e 21010 AUTH | grep -q "^Unauthorized"
+          /tmp/e2e 21010 AUTH test:test | grep -q "^Ok frames=[1-9]"
+
+      - name: Install arduino-cli and the Pico core
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=/usr/local/bin sh
+          arduino-cli config init
+          arduino-cli config add board_manager.additional_urls https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json
+          arduino-cli core update-index
+          arduino-cli core install rp2040:rp2040@${ARDUINO_PICO_VERSION}
+          arduino-cli lib install ArduinoJson@${ARDUINOJSON_VERSION}
+
+      - name: Build UF2
+        run: |
+          VERSION=$(git describe --tags --always)
+          PICORTK_VERSION=$VERSION ./tools/build.sh
+          mv build/PicoRTK.ino.uf2 build/PicoRTK-$VERSION.uf2
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PicoRTK-${{ env.VERSION }}
+          path: build/PicoRTK-*.uf2
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/PicoRTK-*.uf2

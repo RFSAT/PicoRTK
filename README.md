@@ -1,0 +1,133 @@
+# PicoRTK
+
+RTK GNSS rover firmware for a **Raspberry Pi Pico 2 W** with a **Waveshare LG290P GNSS RTK module**. This is Option 2 of the RFSAT embedded RTK receiver.
+
+The LG290P computes the RTK solution. The Pico handles everything around it:
+
+- It fetches NTRIP corrections over Wi-Fi from up to four sources in priority order, with failover.
+- It serves NMEA over **Bluetooth SPP** (Android, Windows) or **BLE UART** (iOS), **USB** and **TCP**.
+- It hosts a configuration web page.
+
+## Wiring
+
+| Waveshare LG290P | Pico 2 W | Purpose |
+|---|---|---|
+| 5V | VSYS (or VBUS) | power |
+| GND | GND | ground |
+| RXD | GP0 (UART0 TX) | RTCM and commands into the receiver |
+| TXD | GP1 (UART0 RX) | NMEA out of the receiver |
+| RTK | GP2 | fix status (optional) |
+
+Optional parts:
+
+- **LEDs on GP14 (RTK) and GP15 (corrections)**, each through a 330 Ω resistor to GND.
+- **A push-button from GP16 to GND.** Hold it for 3 s to open the setup access point.
+
+Check the pin labels against Waveshare's pinout before powering up.
+
+## Receiver set-up (once, over the module's own USB-C, with QGNSS)
+
+1. Update the LG290P firmware to a release with Galileo HAS.
+2. Set rover mode, with all constellations and bands, and E6 on.
+3. Set the outputs to GGA, RMC, GSA, GSV and GST at 1 Hz (up to 10 Hz for vehicles).
+4. Set **UART1 to 460800 bit/s**, carrying NMEA out and RTCM in.
+5. Enable PPP/HAS.
+6. Save to flash and power-cycle to confirm the settings persist.
+
+You can also do this through the Pico: with **USB bridge** on (the default), the Pico's USB port carries the receiver's stream, and whatever you type goes to the receiver. QGNSS can therefore connect to the Pico's COM port. Firmware updates of the LG290P still need the module's own USB-C port.
+
+## Flashing
+
+1. Download `PicoRTK-<version>.uf2` from the GitHub Actions run or release.
+2. Hold **BOOTSEL** while plugging the Pico into USB.
+3. Copy the UF2 onto the `RP2350` drive that appears. The Pico restarts by itself.
+
+Settings live in a separate flash area and survive firmware updates.
+
+## First configuration
+
+1. With no known Wi-Fi, the Pico opens the access point **`PicoRTK-Setup-XXXX`**. The password is `picortk-setup`.
+2. Join it and open **http://192.168.42.1**. Log in as user `admin` with password `picortk`, and change both passwords on the **Wi-Fi & outputs** tab.
+3. Fill in, then press **Save and restart**:
+   - your Wi-Fi networks;
+   - the correction sources, in priority order (own base, Metrica VRS, Metrica nearest, EUREF);
+   - the Bluetooth mode.
+4. On your network, the page is at the Pico's IP address. **Backup → Download settings** saves a file you can upload to the next unit.
+
+## Correction-source failover
+
+| Event on the active source | Action |
+|---|---|
+| Cannot connect, no reply in 10 s, 5xx / banned / sandbox reply, link broken, no valid RTCM frame for `dataTimeoutSec` (30 s), or correction age in GGA above `maxAgeSec` (10 s) for 10 s while in RTK | Moves to the next source after `retryMs` (2 s) |
+| 401/403 (login), SOURCETABLE or 404 (mount point), other 4xx | Disables that source until settings change or restart, then moves on |
+| Every usable source has failed in a row | Waits per the back-off steps (15 s, 30 s, 1 min, 2 min, 5 min), then starts again at source 1 |
+| Every source is disabled | Stops. The web page shows why. |
+| Running on a lower source for `failbackSec` (600 s) | Returns to the highest-priority source |
+| Wi-Fi lost | Keeps the current source, waits for Wi-Fi. The receiver uses Galileo HAS meanwhile. |
+
+**Sources with "Send position (GGA)" on (VRS, nearest station):**
+
+- The Pico waits up to 60 s for a fix before connecting.
+- It then sends the receiver's GGA every `ggaSec`.
+
+**RTCM checks and inbound corrections:**
+
+- Every RTCM frame is CRC-checked before it reaches the receiver.
+- When NTRIP is not streaming, RTCM sent by a Bluetooth or TCP app (one running its own NTRIP client) is passed to the receiver as well.
+
+## Architecture
+
+| Core | Work |
+|---|---|
+| 0 | Wi-Fi manager, NTRIP client and source selector, Bluetooth/TCP outputs, web page, LEDs |
+| 1 | Receiver UART (460800, 8 KB FIFO), USB bridge, NMEA validation and GGA extraction |
+
+The cores exchange data through lock-free single-producer/single-consumer rings (RTCM to the receiver, NMEA to the network) and a mutex-protected copy of the latest GGA.
+
+| File | Contents |
+|---|---|
+| `firmware/PicoRTK/PicoRTK.ino` | start-up, core loops |
+| `receiver.*` | core 1: UART, USB bridge |
+| `ntrip.*` | NTRIP client state machine |
+| `selector.*` | failover policy (portable, unit-tested) |
+| `ntrip_proto.*` | request, reply parsing, chunked decoding (portable, unit-tested) |
+| `rtcm.*`, `nmea.*`, `ring.h` | framing, checksums, queues (portable, unit-tested) |
+| `outputs.*` | SPP, BLE, TCP |
+| `net.*`, `web.*`, `status.*`, `config.*` | Wi-Fi, web API, LEDs and button, settings JSON |
+| `firmware/web/index.html` | configuration page, embedded at build time by `tools/embed_web.py` |
+| `tools/fake_caster.py` | bench caster with GOOD / STALL / DROP / AUTH mount points for failover tests |
+
+## Building
+
+```
+arduino-cli core install rp2040:rp2040@6.3.0     # board manager URL: earlephilhower/arduino-pico
+arduino-cli lib install ArduinoJson@7.4.2
+./tools/build.sh                                  # -> build/PicoRTK.ino.uf2
+```
+
+The board options are Pico 2 W, **IPv4 + Bluetooth**, and 4 MB flash with 1 MB for the file system. CI (`.github/workflows/build.yml`) runs:
+
+- the host unit tests;
+- the protocol test against the fake caster;
+- the UF2 build. Tags `v*` publish a release.
+
+## Bench test with the fake caster
+
+```
+python3 tools/fake_caster.py --port 2101
+```
+
+Set the sources to `<PC IP>:2101`, with source 1 on `/STALL`, source 2 on `/AUTH` (no login) and source 3 on `/GOOD`. The expected event log:
+
+1. source 1 fails with "no RTCM data" after 30 s;
+2. source 2 fails with "login rejected (401)" and is disabled;
+3. source 3 streams.
+
+`/DROP` closes the connection after 20 s.
+
+## Known limits (v0.1)
+
+- **SPP + BLE together is experimental.** Two Arduino-Pico Bluetooth libraries share one BTstack. Use SPP for Android and BLE for iOS.
+- **Galileo HAS** is handled by the LG290P itself. Whether it falls back automatically when RTCM stops is to be confirmed on the bench.
+- **Receiver configuration** at start-up is limited to the raw `bootCmds` you enter. The Pico does not otherwise configure the LG290P.
+- **The Extended variant (LTE-M via SIM7080G) is not in this version.**

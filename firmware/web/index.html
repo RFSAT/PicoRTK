@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PicoRTK</title>
+<style>
+/* Served by the device itself, often with no internet: system fonts only, no external files */
+:root{--bg:#eef1f2;--panel:#fff;--ink:#15211f;--muted:#5b6a68;--line:#d3dbda;--accent:#0b6e5f;--on:#fff;--ok:#1d7a3a;--warn:#a15c00;--err:#b3261e;--code:#0f1a19;--codeink:#cfe9e2;
+--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;--sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1514;--panel:#16201f;--ink:#e3ecea;--muted:#93a5a2;--line:#2a3836;--accent:#3fbfa6;--on:#06201b;--ok:#5cc97b;--warn:#e3a54a;--err:#ff8a80;--code:#081110;--codeink:#bfe6dc;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 var(--sans)}
+header{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;padding:14px 16px;border-bottom:2px solid var(--ink)}
+h1{margin:0;font-size:22px;letter-spacing:.02em}
+header small{color:var(--muted);font-family:var(--mono)}
+nav{display:flex;gap:4px;padding:8px 16px;overflow-x:auto}
+nav button{border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:6px 12px;border-radius:4px;font:inherit;cursor:pointer;white-space:nowrap}
+nav button[aria-selected=true]{background:var(--accent);border-color:var(--accent);color:var(--on)}
+main{max-width:980px;margin:0 auto;padding:8px 16px 40px;display:flex;flex-direction:column;gap:14px}
+section{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px}
+h2{margin:0 0 8px;font-size:16px}
+.hint{margin:0 0 10px;color:var(--muted);font-size:13px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px 12px}
+.wide{grid-column:1/-1}
+label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;min-width:0}
+label.check{flex-direction:row;align-items:center;gap:8px;text-transform:none;font-size:14px;color:var(--ink);letter-spacing:0}
+input,select,textarea{font:14px var(--mono);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:7px 8px;width:100%}
+label.check input{width:auto}
+textarea{min-height:90px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.btn{font:500 14px var(--sans);border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:4px;padding:8px 14px;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:14px}
+.kv dt{color:var(--muted)} .kv dd{margin:0;font-family:var(--mono);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+.pill{display:inline-block;font:600 12px var(--mono);padding:2px 8px;border-radius:10px;border:1px solid currentColor}
+.q4{color:var(--ok)} .q5{color:var(--warn)} .q0,.q1,.q2{color:var(--err)}
+.src{border-left:4px solid var(--line);padding-left:10px}
+.src.active{border-left-color:var(--accent)}
+pre{margin:0;background:var(--code);color:var(--codeink);font:12.5px/1.5 var(--mono);padding:10px;border-radius:4px;overflow:auto;max-height:320px;white-space:pre-wrap}
+#msg{font:13px var(--mono)} #msg.err{color:var(--err)} #msg.ok{color:var(--ok)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header><h1>PicoRTK</h1><small id="hdr">connecting…</small></header>
+<nav role="tablist">
+  <button data-tab="status" aria-selected="true">Status</button>
+  <button data-tab="corr">Corrections</button>
+  <button data-tab="net">Wi-Fi &amp; outputs</button>
+  <button data-tab="rx">Receiver</button>
+  <button data-tab="backup">Backup</button>
+</nav>
+<main>
+<div data-page="status">
+  <div class="tiles">
+    <section><h2>Position</h2><dl class="kv" id="sGnss"></dl></section>
+    <section><h2>Corrections</h2><dl class="kv" id="sNtrip"></dl></section>
+    <section><h2>Links</h2><dl class="kv" id="sLinks"></dl></section>
+  </div>
+  <section><h2>Correction events</h2><pre id="log">…</pre></section>
+</div>
+
+<div data-page="corr" hidden>
+  <section>
+    <h2>Failover</h2>
+    <p class="hint">Sources are tried in order. A failure (no connection, no reply, rejected login or mount point, no RTCM for the timeout, or a correction age above the limit) moves to the next source. After every source has failed in a row the device waits (back-off) before starting again from source 1.</p>
+    <div class="grid">
+      <label class="check"><input type="checkbox" id="failover"> Failover between sources</label>
+      <label>Return to source 1 after (s, 0 = never)<input type="number" id="failbackSec" min="0"></label>
+      <label>No RTCM timeout (s)<input type="number" id="dataTimeoutSec" min="5"></label>
+      <label>Max correction age (s, 0 = off)<input type="number" id="maxAgeSec" min="0"></label>
+      <label>GGA interval (s)<input type="number" id="ggaSec" min="1"></label>
+      <label>Back-off steps (s)<input id="backoffSec" placeholder="15,30,60,120,300"></label>
+    </div>
+  </section>
+  <div id="sources" style="display:flex;flex-direction:column;gap:14px"></div>
+</div>
+
+<div data-page="net" hidden>
+  <section>
+    <h2>Wi-Fi networks</h2>
+    <p class="hint">Tried in order; the first in range is used. Without any, the device opens its setup access point.</p>
+    <div class="grid" id="wifi"></div>
+    <div class="row" style="margin-top:10px"><button class="btn" id="scan" type="button">Scan</button><span class="hint" id="scanOut"></span></div>
+  </section>
+  <section>
+    <h2>Outputs</h2>
+    <div class="grid">
+      <label>Device name<input id="deviceName" maxlength="20"></label>
+      <label>Bluetooth<select id="bt"><option value="spp">Classic SPP (Android, Windows)</option><option value="ble">BLE UART (iOS)</option><option value="both">SPP + BLE (experimental)</option><option value="off">Off</option></select></label>
+      <label>NMEA TCP port (0 = off)<input type="number" id="tcpPort" min="0" max="65535"></label>
+      <label class="check"><input type="checkbox" id="usb"> USB: receiver stream and QGNSS bridge</label>
+      <label class="check"><input type="checkbox" id="inboundRtcm"> Accept RTCM from Bluetooth/TCP apps when NTRIP is idle</label>
+    </div>
+  </section>
+  <section>
+    <h2>Access</h2>
+    <div class="grid">
+      <label>Web login password (user admin)<input type="password" id="adminPass" autocomplete="new-password"></label>
+      <label>Setup access point password (8+)<input type="password" id="apPass" autocomplete="new-password"></label>
+    </div>
+  </section>
+</div>
+
+<div data-page="rx" hidden>
+  <section>
+    <h2>Receiver link</h2>
+    <div class="grid">
+      <label>UART speed (bit/s)<select id="uartBaud"><option>115200</option><option>230400</option><option>460800</option><option>921600</option></select></label>
+      <label class="wide">Commands sent at start-up (one per line, checksum added when missing)<textarea id="bootCmds" spellcheck="false"></textarea></label>
+    </div>
+  </section>
+  <section>
+    <h2>Send a command now</h2>
+    <p class="hint">Quectel PQTM commands, for example <code>$PQTMVERNO</code>. Replies appear on USB and in the NMEA stream.</p>
+    <div class="row"><input id="cmd" placeholder="$PQTMVERNO" style="flex:1;min-width:0"><button class="btn" id="sendCmd" type="button">Send</button></div>
+  </section>
+</div>
+
+<div data-page="backup" hidden>
+  <section>
+    <h2>Settings file</h2>
+    <p class="hint">Download the full settings (with passwords) to copy one tested setup to every unit. Uploading replaces the settings and restarts the device.</p>
+    <div class="row">
+      <a class="btn" href="/api/config?secrets=1">Download settings</a>
+      <label class="btn" style="text-transform:none;font-size:14px;letter-spacing:0;color:var(--ink)">Upload settings<input type="file" id="upload" accept=".json" hidden></label>
+      <button class="btn" id="reboot" type="button">Restart</button>
+    </div>
+  </section>
+</div>
+
+<div class="row" id="saveBar" hidden><button class="btn primary" id="save" type="button">Save and restart</button><span id="msg"></span></div>
+</main>
+
+<script>
+const $=id=>document.getElementById(id);
+let cfg=null;
+const TYPES={base:"Own base",vrs:"VRS",near:"Nearest station",other:"Other"};
+
+// Tabs
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll("nav button").forEach(x=>x.setAttribute("aria-selected",x===b));
+  document.querySelectorAll("[data-page]").forEach(p=>p.hidden=p.dataset.page!==b.dataset.tab);
+  $("saveBar").hidden=!["corr","net","rx"].includes(b.dataset.tab);
+});
+
+function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+function kv(el,rows){el.innerHTML=rows.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${v}</dd>`).join("")}
+function msg(t,c){const m=$("msg");m.textContent=t;m.className=c||""}
+
+async function status(){
+  try{
+    const s=await (await fetch("/api/status")).json();
+    $("hdr").textContent=`v${s.version} · ${s.wifi.mode} ${s.wifi.ssid||""} ${s.wifi.ip} · up ${Math.floor(s.uptimeSec/60)} min`;
+    const g=s.gnss;
+    kv($("sGnss"),[
+      ["Fix",`<span class="pill q${g.quality??0}">${esc(g.qualityName)}</span>`],
+      ["Satellites",g.sats??"–"],["HDOP",g.hdop??"–"],
+      ["Latitude",g.lat??"–"],["Longitude",g.lon??"–"],["Altitude",g.alt!=null?g.alt.toFixed(3)+" m":"–"],
+      ["Correction age",g.age>=0?g.age.toFixed(1)+" s":"–"],["Base station",g.station>=0?g.station:"–"],["UTC",g.utc||"–"]]);
+    const n=s.ntrip;
+    kv($("sNtrip"),[
+      ["State",esc(n.state)],["Source",`${n.source} · ${esc(n.sourceName)}`],["Caster",esc(n.host)+"/"+esc(n.mount)],
+      ["On stream",n.streamSec+" s"],["Last frame",n.lastFrameAgoMs!=null?(n.lastFrameAgoMs/1000).toFixed(1)+" s ago":"–"],
+      ["Frames / CRC errors",n.frames+" / "+n.crcErrors],["Base id (1005)",n.stationId>=0?n.stationId:"–"],
+      ["Failovers",n.switches],["Last event",esc(n.lastEvent)]]);
+    const o=s.outputs,u=s.uart;
+    kv($("sLinks"),[
+      ["Bluetooth",`${esc(s.bluetoothName)} (${o.bt}) ${o.spp?"SPP connected":""} ${o.ble?"BLE connected":""}`],
+      ["TCP clients",o.tcpPort?`${o.tcpClients} on port ${o.tcpPort}`:"off"],
+      ["Wi-Fi signal",s.wifi.rssi?s.wifi.rssi+" dBm":"–"],
+      ["Receiver UART",`${u.baud} bit/s · rx ${u.rxBytes} B · tx ${u.txBytes} B`],
+      ["NMEA good / bad",u.nmeaGood+" / "+u.nmeaBad],["Dropped (queues full)",u.drops]]);
+    document.querySelectorAll(".src").forEach((el,i)=>el.classList.toggle("active",i===n.source-1));
+    $("log").textContent=await (await fetch("/api/log")).text()||"No events yet";
+  }catch(e){$("hdr").textContent="device not reachable"}
+}
+
+function sourceCard(s,i){
+  return `<section class="src"><h2>Source ${i+1}${i===0?" (priority)":""}</h2>
+  <div class="grid">
+    <label>Name<input id="s${i}name" value="${esc(s.name)}"></label>
+    <label>Type<select id="s${i}type">${Object.entries(TYPES).map(([k,v])=>`<option value="${k}"${s.type===k?" selected":""}>${v}</option>`).join("")}</select></label>
+    <label class="wide">Caster host<input id="s${i}host" value="${esc(s.host)}" placeholder="leave empty to skip"></label>
+    <label>Port<input type="number" id="s${i}port" value="${s.port||2101}"></label>
+    <label>Mount point<input id="s${i}mount" value="${esc(s.mount)}"></label>
+    <label>User<input id="s${i}user" value="${esc(s.user)}" autocomplete="off"></label>
+    <label>Password<input type="password" id="s${i}pass" value="${esc(s.pass)}" autocomplete="new-password"></label>
+    <label class="check"><input type="checkbox" id="s${i}gga"${s.gga?" checked":""}> Send position (GGA)</label>
+    <label class="check"><input type="checkbox" id="s${i}v2"${s.v2?" checked":""}> NTRIP 2.0</label>
+    <label class="check"><input type="checkbox" id="s${i}tls"${s.tls?" checked":""}> TLS</label>
+  </div></section>`;
+}
+
+async function loadConfig(){
+  cfg=await (await fetch("/api/config")).json();
+  const f=cfg.failover,o=cfg.outputs,r=cfg.receiver;
+  $("failover").checked=f.enabled;$("failbackSec").value=f.failbackSec;$("dataTimeoutSec").value=f.dataTimeoutSec;
+  $("maxAgeSec").value=f.maxAgeSec;$("ggaSec").value=f.ggaSec;$("backoffSec").value=f.backoffSec.join(",");
+  $("sources").innerHTML=cfg.ntrip.map(sourceCard).join("");
+  let w="";for(let i=0;i<4;i++){const n=cfg.wifi[i]||{};w+=`<label>Network ${i+1}<input id="w${i}ssid" value="${esc(n.ssid)}" placeholder="SSID"></label><label>Password<input type="password" id="w${i}pass" value="${esc(n.pass)}" autocomplete="new-password"></label>`}
+  $("wifi").innerHTML=w;
+  $("deviceName").value=cfg.deviceName;$("bt").value=o.bt;$("tcpPort").value=o.tcpPort;$("usb").checked=o.usb;$("inboundRtcm").checked=o.inboundRtcm;
+  $("adminPass").value=cfg.web.adminPass;$("apPass").value=cfg.web.apPass;
+  $("uartBaud").value=String(r.uartBaud);$("bootCmds").value=(r.bootCmds||[]).join("\n");
+}
+
+function collect(){
+  const ntrip=[];for(let i=0;i<4;i++)ntrip.push({name:$(`s${i}name`).value.trim(),type:$(`s${i}type`).value,host:$(`s${i}host`).value.trim(),
+    port:+$(`s${i}port`).value||2101,mount:$(`s${i}mount`).value.trim(),user:$(`s${i}user`).value.trim(),pass:$(`s${i}pass`).value,
+    gga:$(`s${i}gga`).checked,v2:$(`s${i}v2`).checked,tls:$(`s${i}tls`).checked});
+  const wifi=[];for(let i=0;i<4;i++){const s=$(`w${i}ssid`).value.trim();if(s)wifi.push({ssid:s,pass:$(`w${i}pass`).value})}
+  const backoff=$("backoffSec").value.split(/[ ,;]+/).map(Number).filter(n=>n>0).slice(0,5);
+  return {deviceName:$("deviceName").value.trim(),web:{adminPass:$("adminPass").value,apPass:$("apPass").value},wifi,ntrip,
+    failover:{enabled:$("failover").checked,failbackSec:+$("failbackSec").value,retryMs:cfg.failover.retryMs,backoffSec:backoff.length?backoff:[15,30,60,120,300],
+      dataTimeoutSec:+$("dataTimeoutSec").value,maxAgeSec:+$("maxAgeSec").value,ggaSec:+$("ggaSec").value},
+    outputs:{bt:$("bt").value,usb:$("usb").checked,tcpPort:+$("tcpPort").value,inboundRtcm:$("inboundRtcm").checked},
+    receiver:{uartBaud:+$("uartBaud").value,bootCmds:$("bootCmds").value.split("\n").map(s=>s.trim()).filter(Boolean)}};
+}
+
+function check(c){
+  for(const [i,s] of c.ntrip.entries()) if(s.host&&!s.mount) return `Source ${i+1}: add a mount point or clear the host.`;
+  if(!c.ntrip.some(s=>s.host&&s.mount)) return "Add at least one correction source.";
+  if(c.web.apPass.length<8) return "The access point password needs 8 or more characters.";
+  return "";
+}
+
+async function post(body){
+  const r=await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body});
+  const t=await r.text(); if(!r.ok) throw new Error(t); return t;
+}
+$("save").onclick=async()=>{
+  const c=collect(),e=check(c); if(e){msg(e,"err");return}
+  try{msg(await post(JSON.stringify(c)),"ok");setTimeout(()=>location.reload(),9000)}catch(x){msg(x.message,"err")}
+};
+$("upload").onchange=ev=>{const f=ev.target.files[0];if(!f)return;const rd=new FileReader();
+  rd.onload=async()=>{try{JSON.parse(rd.result);$("saveBar").hidden=false;msg(await post(rd.result),"ok");setTimeout(()=>location.reload(),9000)}catch(x){$("saveBar").hidden=false;msg("Upload failed: "+x.message,"err")}};rd.readAsText(f)};
+$("reboot").onclick=async()=>{await fetch("/api/reboot",{method:"POST"});setTimeout(()=>location.reload(),8000)};
+$("sendCmd").onclick=async()=>{const r=await fetch("/api/cmd",{method:"POST",body:$("cmd").value});$("saveBar").hidden=false;msg(await r.text(),r.ok?"ok":"err")};
+$("scan").onclick=async()=>{$("scanOut").textContent="scanning…";try{const l=await (await fetch("/api/scan")).json();
+  $("scanOut").textContent=l.map(n=>`${n.ssid} (${n.rssi} dBm)`).join(", ")||"none found"}catch{$("scanOut").textContent="scan failed"}};
+
+loadConfig().then(status);setInterval(status,2000);
+</script>
+</body>
+</html>

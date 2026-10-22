@@ -1,0 +1,18 @@
+// outputs.h - core 0: NMEA to Bluetooth SPP / BLE / TCP clients, inbound RTCM from them
+#pragma once
+#include <Arduino.h>
+
+void outputsSetup();          // after configLoad(); starts Bluetooth
+void outputsNetworkUp(bool up); // starts/stops the TCP server
+void outputsLoop(bool ntripStreaming);
+
+struct OutputStatus
+{
+    bool sppConnected;
+    bool bleConnected;
+    int tcpClients;
+    uint32_t sentBytes;
+    uint32_t inboundFrames;
+};
+void outputsStatus(OutputStatus &s);
+String outputsBtName();
