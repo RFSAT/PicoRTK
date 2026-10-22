@@ -46,7 +46,7 @@ jobs:
       - name: Build UF2
         run: |
           VERSION=$(git describe --tags --always)
-          PICORTK_VERSION=$VERSION ./tools/build.sh
+          PICORTK_VERSION=$VERSION bash tools/build.sh
           mv build/PicoRTK.ino.uf2 build/PicoRTK-$VERSION.uf2
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
