@@ -1,2 +1,3 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Keep shell and Python scripts with LF line endings when committed from Windows
+*.sh text eol=lf
+*.py text eol=lf
