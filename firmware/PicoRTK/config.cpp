@@ -246,17 +246,18 @@ bool configLoad()
     cfg = Config();
     cfg.src[0].name = "Own base";
     cfg.src[0].type = "base";
-    cfg.src[1].name = "Metrica VRS";
-    cfg.src[1].type = "vrs";
+    // Metrica nearest station first: 6 mm measured with the EOS Arrow Gold on MSM_NEAR
+    cfg.src[1].name = "Metrica nearest";
+    cfg.src[1].type = "near";
     cfg.src[1].host = "gr.nrtk.eu";
     cfg.src[1].port = 7801;
-    cfg.src[1].mount = "MSM_VRS";
+    cfg.src[1].mount = "MSM_NEAR";
     cfg.src[1].gga = true;
-    cfg.src[2].name = "Metrica nearest";
-    cfg.src[2].type = "near";
+    cfg.src[2].name = "Metrica VRS";
+    cfg.src[2].type = "vrs";
     cfg.src[2].host = "gr.nrtk.eu";
     cfg.src[2].port = 7801;
-    cfg.src[2].mount = "MSM_NEAR";
+    cfg.src[2].mount = "MSM_VRS";
     cfg.src[2].gga = true;
     cfg.src[3].name = "EUREF";
     cfg.src[3].type = "near";

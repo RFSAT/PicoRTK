@@ -1,17 +1,92 @@
 {
   "deviceName": "PicoRTK",
-  "web": { "adminPass": "change-me", "apPass": "picortk-setup" },
+  "web": {
+    "adminPass": "change-me",
+    "apPass": "picortk-setup"
+  },
   "wifi": [
-    { "ssid": "FieldRouter", "pass": "..." },
-    { "ssid": "PhoneHotspot", "pass": "..." }
+    {
+      "ssid": "FieldRouter",
+      "pass": "..."
+    },
+    {
+      "ssid": "PhoneHotspot",
+      "pass": "..."
+    }
   ],
   "ntrip": [
-    { "name": "Own base EOS", "type": "base", "host": "your-caster.example", "port": 2101, "mount": "OWN1", "user": "", "pass": "", "gga": false, "v2": false, "tls": false },
-    { "name": "Metrica VRS", "type": "vrs", "host": "gr.nrtk.eu", "port": 7801, "mount": "MSM_VRS", "user": "...", "pass": "...", "gga": true, "v2": false, "tls": false },
-    { "name": "Metrica nearest", "type": "near", "host": "gr.nrtk.eu", "port": 7801, "mount": "MSM_NEAR", "user": "...", "pass": "...", "gga": true, "v2": false, "tls": false },
-    { "name": "EUREF", "type": "near", "host": "euref-ip.net", "port": 2101, "mount": "XXXX00GRC0", "user": "...", "pass": "...", "gga": false, "v2": false, "tls": false }
+    {
+      "name": "Own base EOS",
+      "type": "base",
+      "host": "your-caster.example",
+      "port": 2101,
+      "mount": "OWN1",
+      "user": "",
+      "pass": "",
+      "gga": false,
+      "v2": false,
+      "tls": false
+    },
+    {
+      "name": "Metrica nearest",
+      "type": "near",
+      "host": "gr.nrtk.eu",
+      "port": 7801,
+      "mount": "MSM_NEAR",
+      "user": "...",
+      "pass": "...",
+      "gga": true,
+      "v2": false,
+      "tls": false
+    },
+    {
+      "name": "Metrica VRS",
+      "type": "vrs",
+      "host": "gr.nrtk.eu",
+      "port": 7801,
+      "mount": "MSM_VRS",
+      "user": "...",
+      "pass": "...",
+      "gga": true,
+      "v2": false,
+      "tls": false
+    },
+    {
+      "name": "EUREF",
+      "type": "near",
+      "host": "euref-ip.net",
+      "port": 2101,
+      "mount": "XXXX00GRC0",
+      "user": "...",
+      "pass": "...",
+      "gga": false,
+      "v2": false,
+      "tls": false
+    }
   ],
-  "failover": { "enabled": true, "failbackSec": 600, "retryMs": 2000, "backoffSec": [15, 30, 60, 120, 300], "dataTimeoutSec": 30, "maxAgeSec": 10, "ggaSec": 10 },
-  "outputs": { "bt": "spp", "usb": true, "tcpPort": 2947, "inboundRtcm": true },
-  "receiver": { "uartBaud": 460800, "bootCmds": [] }
+  "failover": {
+    "enabled": true,
+    "failbackSec": 600,
+    "retryMs": 2000,
+    "backoffSec": [
+      15,
+      30,
+      60,
+      120,
+      300
+    ],
+    "dataTimeoutSec": 30,
+    "maxAgeSec": 10,
+    "ggaSec": 10
+  },
+  "outputs": {
+    "bt": "spp",
+    "usb": true,
+    "tcpPort": 2947,
+    "inboundRtcm": true
+  },
+  "receiver": {
+    "uartBaud": 460800,
+    "bootCmds": []
+  }
 }
