@@ -47,6 +47,14 @@ void outputsSetup()
     }
 }
 
+void outputsStop()
+{
+    for (auto &c : tcpClients)
+        c.stop();
+    if (useSpp)
+        SerialBT.end();
+}
+
 void outputsNetworkUp(bool up)
 {
     if (up && cfg.tcpPort && !tcpServer)

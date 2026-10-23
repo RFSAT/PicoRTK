@@ -2,7 +2,8 @@
 #pragma once
 #include <Arduino.h>
 
-void outputsSetup();          // after configLoad(); starts Bluetooth
+void outputsSetup();            // after configLoad(); starts Bluetooth
+void outputsStop();             // before a restart
 void outputsNetworkUp(bool up); // starts/stops the TCP server
 void outputsLoop(bool ntripStreaming);
 

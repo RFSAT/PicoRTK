@@ -17,6 +17,9 @@
 #include "util.h"
 #include "web.h"
 #include <LittleFS.h>
+#include <WiFi.h>
+#include <hardware/gpio.h>
+#include <hardware/watchdog.h>
 #include <stdarg.h>
 
 #ifndef PICORTK_VERSION
@@ -38,9 +41,31 @@ void dbg(const char *fmt, ...)
     Serial.print(buf);
 }
 
+void safeReboot()
+{
+    dbg("[boot] restarting\r\n");
+    Serial.flush();
+    outputsStop();
+    WiFi.disconnect();
+    WiFi.softAPdisconnect(true);
+    delay(200);
+    // Power the CYW43 radio off (WL_ON = GPIO23 on the Pico 2 W) so it is reset with the RP2350
+    gpio_init(23);
+    gpio_set_dir(23, GPIO_OUT);
+    gpio_put(23, 0);
+    delay(100);
+    watchdog_reboot(0, 0, 10);
+    while (true)
+        tight_loop_contents();
+}
+
 void setup()
 {
     Serial.begin(115200);
+    // Give a serial terminal a moment to attach so the start-up log is not lost
+    for (uint32_t t = millis(); !Serial && millis() - t < 1500;)
+        delay(10);
+    dbg("\r\n[boot] PicoRTK %s\r\n", PICORTK_VERSION);
     receiverInitShared();
     if (!LittleFS.begin())
     {
@@ -48,10 +73,12 @@ void setup()
         LittleFS.begin();
     }
     configLoad();
+    dbg("[boot] settings loaded, Bluetooth %s\r\n", cfg.bt.c_str());
     configReady = true; // core 1 may start the UART now
 
     statusSetup();
     outputsSetup();
+    dbg("[boot] Bluetooth started as %s\r\n", outputsBtName().c_str());
     netSetup();
     webSetup();
     ntripSetup();

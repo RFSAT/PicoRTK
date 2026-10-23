@@ -5,6 +5,7 @@
 #include "ntrip.h"
 #include "outputs.h"
 #include "shared.h"
+#include "util.h"
 #include "web_page.h"
 #include <ArduinoJson.h>
 #include <WebServer.h>
@@ -225,5 +226,5 @@ void webLoop()
 {
     server.handleClient();
     if (rebootAt && (int32_t)(millis() - rebootAt) > 0)
-        rp2040.reboot();
+        safeReboot();
 }

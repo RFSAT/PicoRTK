@@ -2,3 +2,7 @@
 // so debug text goes to USB only when the bridge is off.
 #pragma once
 void dbg(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+
+// Restart cleanly: stop Bluetooth and Wi-Fi and power the radio chip off first,
+// so it starts cold after the reset (a warm radio can stall the next start-up).
+void safeReboot() __attribute__((noreturn));
