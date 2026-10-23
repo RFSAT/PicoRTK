@@ -66,6 +66,13 @@ Settings live in a separate flash area and survive firmware updates.
    - the Bluetooth mode.
 4. On your network, the page is at the Pico's IP address. **Backup → Download settings** saves a file you can upload to the next unit.
 
+## Finding the Pico / troubleshooting
+
+- **LED:** fast blink means the setup access point is on; slow blink means the Pico has joined your Wi-Fi, so the setup network disappears (this is normal).
+- **On your network:** the page is at **http://picortk.local** (the device name in lower case), or at the IP shown in your router's client list.
+- **USB log:** until the receiver is connected, the Pico's USB port prints a status line every 5 s (Wi-Fi mode, network, IP, NTRIP state). Open it with any serial terminal; the speed doesn't matter. Once receiver data flows, USB carries the receiver stream instead.
+- **Back to setup mode:** hold the GP16 button for 3 s; or, if the saved Wi-Fi isn't in range, the setup network returns by itself after about 15 s at power-up.
+
 ## Correction-source failover
 
 | Event on the active source | Action |

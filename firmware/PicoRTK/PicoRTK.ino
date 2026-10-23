@@ -19,12 +19,17 @@
 #include <LittleFS.h>
 #include <stdarg.h>
 
+#ifndef PICORTK_VERSION
+#define PICORTK_VERSION "dev"
+#endif
+
 static uint32_t bootCmdsAt = 0;
 
 void dbg(const char *fmt, ...)
 {
-    if (cfg.usb)
-        return; // USB carries the receiver stream
+    // USB carries the receiver stream once the receiver talks; until then it carries this log
+    if (cfg.usb && stats.uartRxBytes.load() > 0)
+        return;
     char buf[192];
     va_list ap;
     va_start(ap, fmt);
@@ -53,6 +58,20 @@ void setup()
     bootCmdsAt = millis() + 3000; // let the receiver boot first
 }
 
+// Status line on USB every 5 s (only while no receiver data is flowing, see dbg)
+static void logStatus()
+{
+    static uint32_t last = 0;
+    if (millis() - last < 5000)
+        return;
+    last = millis();
+    NtripStatus s;
+    ntripStatus(s);
+    dbg("[picortk %s] wifi=%s ssid=%s ip=%s rssi=%d | ntrip=%s src=%d | uart rx=%lu B\r\n", PICORTK_VERSION,
+        netApMode() ? "setup-AP" : (netUp() ? "connected" : "searching"), netSsid().c_str(), netIp().c_str(), netRssi(),
+        ntripStateName(s.state), s.source + 1, (unsigned long)stats.uartRxBytes.load());
+}
+
 static void sendBootCommands()
 {
     for (int i = 0; i < CFG_MAX_BOOTCMDS; i++)
@@ -75,6 +94,7 @@ void loop()
     ntripLoop(up);
     outputsLoop(ntripStreaming());
     statusLoop();
+    logStatus();
     if (bootCmdsAt && (int32_t)(millis() - bootCmdsAt) > 0)
     {
         bootCmdsAt = 0;

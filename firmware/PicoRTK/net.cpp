@@ -4,6 +4,7 @@
 #include "util.h"
 #include <WiFi.h>
 #include <WiFiMulti.h>
+#include <SimpleMDNS.h>
 
 static WiFiMulti multi;
 static bool apMode = false;
@@ -31,6 +32,23 @@ void netStartAp()
     dbg("[net] setup access point %s, http://%s\r\n", apName().c_str(), WiFi.softAPIP().toString().c_str());
 }
 
+// http://<devicename>.local on the office network (Windows 10+, Android 12+, iOS, macOS)
+static void startMdns()
+{
+    static bool started = false;
+    if (started)
+        return;
+    String host = cfg.deviceName;
+    host.toLowerCase();
+    host.replace(" ", "-");
+    if (MDNS.begin(host.c_str()))
+    {
+        MDNS.addService("http", "tcp", 80);
+        started = true;
+        dbg("[net] http://%s.local\r\n", host.c_str());
+    }
+}
+
 static bool tryStation(uint32_t timeoutMs)
 {
     if (!haveNetworks)
@@ -44,7 +62,10 @@ static bool tryStation(uint32_t timeoutMs)
     bool ok = multi.run(timeoutMs) == WL_CONNECTED;
     lastTry = millis();
     if (ok)
+    {
         dbg("[net] connected to %s, %s\r\n", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
+        startMdns();
+    }
     return ok;
 }
 
@@ -57,6 +78,7 @@ void netSetup()
             multi.addAP(cfg.wifi[i].ssid.c_str(), cfg.wifi[i].pass.length() ? cfg.wifi[i].pass.c_str() : nullptr);
             haveNetworks = true;
         }
+    dbg("[net] %s\r\n", haveNetworks ? "joining the configured Wi-Fi" : "no Wi-Fi configured");
     if (!tryStation(15000))
         netStartAp();
 }
