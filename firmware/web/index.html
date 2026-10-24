@@ -27,6 +27,9 @@ label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--mute
 label.check{flex-direction:row;align-items:center;gap:8px;text-transform:none;font-size:14px;color:var(--ink);letter-spacing:0}
 input,select,textarea{font:14px var(--mono);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:7px 8px;width:100%}
 label.check input{width:auto}
+/* Same row = same height; caption on top, field at the bottom, so fields line up even when a caption wraps */
+.grid>label:not(.check){justify-content:space-between}
+.grid>label.check{align-self:end;min-height:34px}
 textarea{min-height:90px}
 :focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .btn{font:500 14px var(--sans);border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:4px;padding:8px 14px;cursor:pointer}
@@ -77,16 +80,16 @@ pre{margin:0;background:var(--code);color:var(--codeink);font:12.5px/1.5 var(--m
     <p class="hint">Sources are tried in order. A failure (no connection, no reply, rejected login or mount point, no RTCM for the timeout, or a correction age above the limit) moves to the next source. After every source has failed in a row the device waits (back-off) before starting again from source 1.</p>
     <div class="grid">
       <label class="check"><input type="checkbox" id="failover"> Failover between sources</label>
-      <label>Return to source 1 after (s, 0 = never)<input type="number" id="failbackSec" min="0"></label>
-      <label>No RTCM timeout (s)<input type="number" id="dataTimeoutSec" min="5"></label>
-      <label>Max correction age (s, 0 = off)<input type="number" id="maxAgeSec" min="0"></label>
+      <label>Return to source 1 (s)<input type="number" id="failbackSec" min="0"></label>
+      <label>No-data timeout (s)<input type="number" id="dataTimeoutSec" min="5"></label>
+      <label>Max correction age (s)<input type="number" id="maxAgeSec" min="0"></label>
       <label>GGA interval (s)<input type="number" id="ggaSec" min="1"></label>
       <label>Back-off steps (s)<input id="backoffSec" placeholder="15,30,60,120,300"></label>
-      <label>Bench latitude (deg, 0 = off)<input type="number" step="any" id="benchLat"></label>
-      <label>Bench longitude (deg)<input type="number" step="any" id="benchLon"></label>
+      <label>Bench latitude (°)<input type="number" step="any" id="benchLat"></label>
+      <label>Bench longitude (°)<input type="number" step="any" id="benchLon"></label>
       <label>Bench altitude (m)<input type="number" step="any" id="benchAlt"></label>
     </div>
-    <p class="hint">Bench position: sent to VRS and nearest-station casters while the receiver has no fix, so they start streaming (they choose a station from it). Leave 0 in the field.</p>
+    <p class="hint">0 turns off "Return to source 1" and "Max correction age". The bench position is sent to VRS and nearest-station casters while the receiver has no fix, so they start streaming; leave latitude and longitude at 0 to turn it off.</p>
   </section>
   <section>
     <h2>Correction sources</h2>
