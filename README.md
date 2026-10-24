@@ -79,12 +79,25 @@ Every field, button, table column and status line has a short explanation. It ap
 
 ## NMEA output, monitor and shutdown
 
-- **NMEA tab:**
-  - A live view of exactly what is sent to Bluetooth and TCP, refreshed every second; it can be paused.
-  - The sentence types seen from the receiver, each with a counter.
-  - Press the type buttons to choose what is sent (or **GGA + RMC + GST** for the usual RTK set), then **Save and restart**. With none selected, everything is sent. Hovering over (or tapping) a type shows what it carries.
-  - The filter applies to Bluetooth and TCP only. USB always carries the full receiver stream.
-  - To cut the load at the source, also turn unwanted messages off in the receiver.
+- **NMEA tab → Application profiles.** Each profile is a set of LG290P messages plus a fix rate for one kind of use:
+
+  | Profile | Messages | Rate |
+  |---|---|---|
+  | Survey and GIS (SW Maps, QField, Emlid Flow) | GGA RMC GST GSA GSV | 1 Hz |
+  | Static monitoring (deformation, benchmarks, averaging) | GGA GST ZDA GBS PQTMEPE PQTMDOP | 1 Hz |
+  | Agriculture and machine guidance (AgOpenGPS) | GGA VTG | 10 Hz |
+  | Road vehicles and fleet (tracking, road surveys, distance) | GGA RMC VTG GST PQTMVEL PQTMODO | 5 Hz |
+  | Robots and drones (ROS, ArduPilot) | GGA RMC VTG GST | 10 Hz |
+  | Marine and chart plotters (OpenCPN, NMEA 0183 instruments) | GGA RMC GLL VTG GSA GSV ZDA | 1 Hz |
+  | Time synchronisation (gpsd/chrony, loggers; use PPS) | GGA RMC ZDA | 1 Hz |
+  | Minimal (BLE, slow links) | GGA RMC | 1 Hz |
+  | Research and integrity | GGA RMC GST GSA GSV GBS PQTMNAV PQTMEPE PQTMDOP PQTMPL PQTMVEL PQTMPVT | 1 Hz |
+
+- **Message buttons:** all 20 output messages of the LG290P (03) that `$PQTMCFGMSGRATE` can switch, grouped as standard NMEA and Quectel proprietary. Hover or tap for what each carries. HDT, THS and PQTMTAR (heading) are not offered: they need the dual-antenna LG580P.
+- **Fix rate** 1, 2, 5 or 10 Hz, read from the receiver when the tab opens. GSA and GSV always come at 1 Hz. The page estimates the output in kB/s and says whether it suits BLE (about 2 kB/s), SPP or TCP.
+- **Apply to receiver** switches the selected messages on and the other listed ones off on the Pico's UART (GGA always stays on; the Pico needs it), sets the fix rate, enables the odometer when PQTMODO is selected (from 0 m), saves (`$PQTMSAVEPAR`) and restarts the receiver (`$PQTMSRR`). The receiver's replies are listed with an OK count, so a rejected setting is visible.
+- **Save and restart** stores the selection in the Pico, which then sends only those types to Bluetooth and TCP. With none selected, everything is sent. USB always carries the full receiver stream.
+- **Live output** shows exactly what goes to Bluetooth and TCP, refreshed every second; it can be paused.
 - **System → Shut down** (asks for confirmation; so do Restart, Save and restart, and Upload settings):
   - It closes the caster connection, stops Bluetooth, TCP and the receiver link, turns the radio off and halts.
   - Unplug once the LEDs are off.

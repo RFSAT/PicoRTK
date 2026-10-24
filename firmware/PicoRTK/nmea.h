@@ -54,6 +54,11 @@ size_t nmeaMakeGga(double lat, double lon, float alt, uint32_t secOfDay, char *o
 // Sentence type used for output filtering: "GGA" for $GNGGA/$GPGGA..., the full proprietary
 // name for $P... sentences (e.g. "PQTMEPE"). Returns false for malformed input.
 bool nmeaSentenceId(const char *s, size_t len, char *id, size_t idSize);
+static const size_t NMEA_ID_MAX = 20; // "PQTMGEOFENCESTATUS" + NUL
+
+// True for a receiver reply to a command rather than a periodic message:
+// "$PQTM<cmd>,OK...", "$PQTM<cmd>,ERROR,...", and the version / id / serial-number replies.
+bool nmeaIsReply(const char *s, size_t len);
 
 // True when the sentence is a GGA from any talker ($GPGGA, $GNGGA, ...)
 bool nmeaIsGga(const char *s, size_t len);

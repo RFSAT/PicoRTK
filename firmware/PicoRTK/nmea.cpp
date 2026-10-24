@@ -135,6 +135,22 @@ bool nmeaSentenceId(const char *s, size_t len, char *id, size_t idSize)
     return n > 0;
 }
 
+bool nmeaIsReply(const char *s, size_t len)
+{
+    if (len < 8 || strncmp(s, "$PQTM", 5) != 0)
+        return false;
+    const char *comma = (const char *)memchr(s, ',', len);
+    if (!comma)
+        return false;
+    size_t idLen = comma - (s + 1), rest = len - (comma + 1 - s);
+    static const char *const ids[] = {"PQTMVER", "PQTMVERNO", "PQTMUNIQID", "PQTMSN"};
+    for (const char *id : ids)
+        if (idLen == strlen(id) && strncmp(s + 1, id, idLen) == 0)
+            return true;
+    return (rest >= 2 && strncmp(comma + 1, "OK", 2) == 0 && (rest == 2 || comma[3] == ',' || comma[3] == '*')) ||
+           (rest >= 5 && strncmp(comma + 1, "ERROR", 5) == 0);
+}
+
 bool nmeaIsGga(const char *s, size_t len)
 {
     return len > 7 && s[0] == '$' && s[3] == 'G' && s[4] == 'G' && s[5] == 'A' && s[6] == ',';

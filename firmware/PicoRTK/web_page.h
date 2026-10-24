@@ -40,8 +40,12 @@ textarea{min-height:80px}
 .row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:14px}
 .kv dt{color:var(--muted);white-space:nowrap} .kv dd{margin:0;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:10px}
+.tiles{display:grid;grid-template-columns:repeat(3,auto);gap:10px}
+/* Columns sized to their content: a short tile (Position) keeps its natural width, the others share the rest.
+When space runs out, the longest values are cut with "…" (full value on hover) instead of pushing a tile to a new row. */
 .tiles section{min-width:0}
+@media (max-width:900px){.tiles{grid-template-columns:repeat(2,auto)}.tiles section:last-child{grid-column:1/-1}}
+@media (max-width:600px){.tiles{grid-template-columns:minmax(0,1fr)}.tiles section:last-child{grid-column:auto}}
 .about{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 20px;align-items:start}
 .about p{margin:0 0 6px}
 .about .credit{border-left:3px solid var(--accent);padding-left:12px;font-size:14px;line-height:1.5;min-width:200px}
@@ -63,6 +67,15 @@ textarea{min-height:80px}
 pre{margin:0;background:var(--code);color:var(--codeink);font:12.5px/1.5 var(--mono);padding:8px;border-radius:4px;overflow:auto;max-height:320px;white-space:pre-wrap}
 #msg{font:13px var(--mono)} #msg.err{color:var(--err)} #msg.ok{color:var(--ok)}
 [hidden]{display:none!important}
+/* NMEA application profiles */
+.profiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,250px),1fr));gap:8px}
+.prof{text-align:left;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;cursor:pointer;display:flex;flex-direction:column;gap:3px}
+.prof b{font-size:14px}
+.prof span{font-size:13px;color:var(--muted)}
+.prof code{font:12px var(--mono);color:var(--ink)}
+.prof[aria-pressed=true]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.prof[aria-pressed=true] b{color:var(--accent)}
+.grp{font:600 11px var(--sans);color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin:8px 0 4px}
 /* NMEA type toggles */
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{font:600 13px var(--mono);border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:16px;padding:5px 11px;cursor:pointer;display:inline-flex;gap:6px;align-items:baseline}
@@ -167,14 +180,26 @@ Dublin, Ireland · Athens, Greece<br>
 </div>
 <div data-page="nmea" hidden>
 <section>
+<h2>Application profiles</h2>
+<p class="hint">Each profile is a tested set of LG290P messages and a fix rate for one kind of use. Pick one, adjust the messages below if needed, then press <b>Apply to receiver</b> (the LG290P outputs only what is switched on) and <b>Save and restart</b> (the Pico sends only the selected types to Bluetooth and TCP).</p>
+<div class="profiles" id="profiles"></div>
+</section>
+<section>
 <h2>Messages sent to Bluetooth and TCP</h2>
-<p class="hint">Press a type to send it; press again to stop. With none selected, everything the receiver outputs is sent. Hover over (or tap) a type to see what it carries; the number is how many arrived since start-up, and a dashed outline means the receiver has not sent it yet. USB always carries the full receiver stream. The choice takes effect after <b>Save and restart</b>.</p>
-<div class="chips" id="nmeaTypes"></div>
+<p class="hint">Press a type to send it; press again to stop. With none selected, everything the receiver outputs is sent. Hover over (or tap) a type to see what it carries. The number is how many arrived since start-up; a dashed outline means the receiver is not outputting it at the moment. USB always carries the full receiver stream.</p>
+<div class="grp">Standard NMEA 0183</div><div class="chips" id="chipsStd"></div>
+<div class="grp">Quectel proprietary</div><div class="chips" id="chipsPq"></div>
+<div id="otherWrap" hidden><div class="grp">Other, seen from the receiver</div><div class="chips" id="chipsOther"></div></div>
+<div class="grid" style="margin-top:10px">
+<label>Fix rate<select id="fixHz"><option value="1">1 Hz</option><option value="2">2 Hz</option><option value="5">5 Hz</option><option value="10">10 Hz</option></select></label>
+<label class="wide" style="justify-content:flex-end">Estimated output<span class="hint" id="nmeaBw" style="margin:0;text-transform:none;letter-spacing:0;font-size:13px"></span></label>
+</div>
 <div class="row" style="margin-top:10px">
-<button class="btn" id="nmeaRec" type="button">GGA + RMC + GST</button>
+<button class="btn" id="nmeaApply" type="button">Apply to receiver</button>
 <button class="btn" id="nmeaAll" type="button">Clear (send all)</button>
 <span class="hint" id="nmeaSel"></span>
 </div>
+<pre id="applyLog" hidden style="margin-top:8px;max-height:200px"></pre>
 </section>
 <section>
 <div class="row" style="justify-content:space-between"><h2>Live output</h2><span class="row"><span class="hint" id="nmeaRate"></span><button class="btn" id="nmeaPause" type="button">Pause</button></span></div>
@@ -219,7 +244,7 @@ document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
 document.querySelectorAll("nav button").forEach(x=>x.setAttribute("aria-selected",x===b));
 document.querySelectorAll("[data-page]").forEach(p=>p.hidden=p.dataset.page!==b.dataset.tab);
 $("saveBar").hidden=!["corr","net","rx","nmea"].includes(b.dataset.tab);
-nmeaVisible=b.dataset.tab==="nmea"; if(nmeaVisible) nmeaPoll();
+nmeaVisible=b.dataset.tab==="nmea"; if(nmeaVisible){nmeaPoll(); if(!readFixRate.done){readFixRate.done=1;readFixRate()}}
 });
 function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 function kv(el,rows){el.innerHTML=rows.map(([k,v])=>`<dt${KVHELP[k]?` data-help="${esc(KVHELP[k])}"`:""}>${esc(k)}</dt><dd title="${esc(String(v).replace(/<[^>]*>/g,""))}">${v}</dd>`).join("")}
@@ -239,7 +264,7 @@ kv($("sNtrip"),[
 ["State",esc(n.state)],["Source",`${n.source} · ${esc(n.sourceName)}`],["Caster",esc(n.host)+"/"+esc(n.mount)],
 ["On stream",n.streamSec+" s"],["Last frame",n.lastFrameAgoMs!=null?(n.lastFrameAgoMs/1000).toFixed(1)+" s ago":"–"],
 ["Bytes on stream",n.streamBytes],["Frames / CRC errors",n.frames+" / "+n.crcErrors],
-["GGA sent",n.ggaSent+(n.lastGga?" · "+esc(n.lastGga):"")],["Base id (1005)",n.stationId>=0?n.stationId:"–"],
+["GGA sent",n.ggaSent+(n.lastGga?" · "+esc((n.lastGga.split(",")[1]||"").slice(0,6))+" UTC":"")],["Base id (1005)",n.stationId>=0?n.stationId:"–"],
 ["Failovers",n.switches],["Last event",esc(n.lastEvent)]]);
 const o=s.outputs,u=s.uart;
 kv($("sLinks"),[
@@ -249,7 +274,7 @@ kv($("sLinks"),[
 ["Receiver UART",`${u.baud} bit/s · rx ${u.rxBytes} B · tx ${u.txBytes} B`],
 ["NMEA good / bad",u.nmeaGood+" / "+u.nmeaBad],["Dropped (queues full)",u.drops]]);
 document.querySelectorAll("#sources tr").forEach((el,i)=>el.classList.toggle("active",i===n.source-1));
-$("log").textContent=await (await fetch("/api/log")).text()||"No events yet";
+$("log").textContent=(await (await fetch("/api/log")).text()||"No events yet")+(n.lastGga?"\nLast GGA sent to the caster: "+n.lastGga:"");
 }catch(e){$("hdr").textContent="device not reachable"}
 }
 function sourceCard(s,i){
@@ -313,49 +338,119 @@ $("shutdown").onclick=async()=>{
 if(!confirm("Shut down the Pico?\n\nIt closes the correction stream and the Bluetooth/TCP links, switches the radio off and halts. Unplug once the LEDs are off. To start it again, power it up."))return;
 const r=await fetch("/api/shutdown",{method:"POST"});$("saveBar").hidden=false;msg(await r.text(),r.ok?"ok":"err");
 };
-// NMEA monitor and type toggles
-const NMEA_INFO={
-GGA:"Fix data: UTC time, position, fix quality (4 = RTK fixed, 5 = RTK float), satellites used, HDOP, altitude, correction age and base station id. Needed by almost every GNSS app and by VRS/nearest-station casters.",
-RMC:"Recommended minimum: UTC time and date, position, speed and course over ground. Most navigation and mapping apps need it for the date.",
-GST:"Accuracy estimate: standard deviation of latitude, longitude and altitude in metres. Survey and field apps (e.g. SW Maps, QField) show accuracy from it.",
-GSA:"DOP values (PDOP, HDOP, VDOP) and the satellites used in the fix, one sentence per constellation.",
-GSV:"Satellites in view: elevation, azimuth and signal strength per satellite and band. The largest message by far; leave it off unless an app shows a sky plot.",
-VTG:"Course and speed over ground (true/magnetic course, knots and km/h).",
-GLL:"Latitude, longitude and UTC time only. Older format; GGA and RMC carry the same and more.",
-ZDA:"UTC date and time with local time-zone fields. Used for time synchronisation.",
-GNS:"Multi-constellation fix data with a mode letter per constellation; an alternative to GGA.",
-GRS:"Range residuals per satellite, for integrity monitoring.",
-PQTMEPE:"Quectel proprietary: estimated position error north, east, down, 2D and 3D in metres.",
-PQTMPVT:"Quectel proprietary: position, velocity and time in one sentence.",
-PQTMDOP:"Quectel proprietary: all dilution-of-precision values.",
-PQTMVERNO:"Quectel proprietary: firmware version (reply to the $PQTMVERNO command).",
-PQTMTXT:"Quectel proprietary: text message from the receiver."};
-const NMEA_COMMON=["GGA","RMC","GST","GSA","GSV","VTG","GLL","ZDA"];
-function nmeaHelp(id){return `<b>${esc(id)}</b> · ${esc(NMEA_INFO[id]||"Not in the built-in list; see the LG290P protocol manual.")}`}
+// NMEA monitor, message catalogue, application profiles
+// Output messages of the LG290P (03) that can be switched with $PQTMCFGMSGRATE (protocol spec v1.1, table 6).
+// ver = message version for PQTM messages; bytes = rough sentence size for the bandwidth estimate.
+const CATALOG=[
+{id:"GGA",bytes:95,info:"Fix data: UTC time, position, fix quality (4 = RTK fixed, 5 = RTK float), satellites used, HDOP, altitude, correction age and base station id. Needed by almost every app and by VRS/nearest-station casters. Always kept on in the receiver because the Pico uses it."},
+{id:"RMC",bytes:80,info:"Recommended minimum: UTC time and date, position, speed and course over ground. Most navigation and mapping apps need it for the date."},
+{id:"VTG",bytes:50,info:"Course and speed over ground (km/h and knots). Used by guidance and auto-steer software (e.g. AgOpenGPS) and by chart plotters."},
+{id:"GST",bytes:70,info:"Accuracy estimate: standard deviation of latitude, longitude and altitude in metres. Survey and field apps show accuracy from it; ROS uses it for the covariance."},
+{id:"GSA",bytes:390,hz1:true,info:"DOP values (PDOP, HDOP, VDOP) and the satellites used in the fix, one sentence per constellation. Output at 1 Hz whatever the fix rate."},
+{id:"GSV",bytes:2800,hz1:true,info:"Satellites in view: elevation, azimuth and signal strength per satellite and band. By far the largest message; needed only for sky plots and signal views. Output at 1 Hz whatever the fix rate."},
+{id:"GLL",bytes:55,info:"Latitude, longitude and UTC time only. Older format, still expected by some marine instruments."},
+{id:"GNS",bytes:95,info:"Multi-constellation fix data with a mode letter per constellation; an alternative to GGA."},
+{id:"GBS",bytes:70,info:"Satellite fault detection (RAIM): expected errors in latitude, longitude and altitude, and the most likely failed satellite. For integrity monitoring."},
+{id:"ZDA",bytes:40,info:"UTC date and time with time-zone fields. For time synchronisation and data loggers."},
+{id:"PQTMEPE",ver:2,bytes:50,info:"Estimated position error north, east, down, 2D and 3D in metres. A direct accuracy figure for monitoring and logging."},
+{id:"PQTMVEL",ver:1,bytes:95,info:"Velocity north, east and down, 2D and 3D speed, course, and their accuracies (m/s, degrees). For vehicle dynamics and machine control."},
+{id:"PQTMPVT",ver:1,bytes:150,info:"Position, velocity and time in one sentence: time of week, date, fix type, satellites, leap seconds, position, velocities, heading, HDOP and PDOP."},
+{id:"PQTMNAV",ver:1,bytes:230,info:"Full navigation solution: time status, position with standard deviations, velocities, DOPs and satellites in view/used. Most complete single message for research."},
+{id:"PQTMDOP",ver:1,bytes:70,info:"All dilution-of-precision values: GDOP, PDOP, TDOP, VDOP, HDOP, NDOP, EDOP."},
+{id:"PQTMPL",ver:1,bytes:100,info:"Protection levels for position (N, E, D), velocity and time at a stated probability. For integrity-critical uses."},
+{id:"PQTMODO",ver:1,bytes:40,info:"Odometer: distance travelled in metres since it was enabled or reset. Applying a profile with it enables the odometer, starting from 0."},
+{id:"PQTMEOE",ver:1,bytes:55,info:"End of epoch: marks the last sentence of each fix, so a parser knows a complete set has arrived."},
+{id:"PQTMGEOFENCESTATUS",ver:1,bytes:40,info:"Geofence status (inside/outside) for geofences set with $PQTMCFGGEOFENCE."},
+{id:"PQTMTXT",ver:1,bytes:40,info:"Short text messages from the receiver (notices and warnings)."}];
+const CAT=Object.fromEntries(CATALOG.map(m=>[m.id,m]));
+const PROFILES=[
+{name:"Survey and GIS",hz:1,msgs:["GGA","RMC","GST","GSA","GSV"],use:"Static points and walking surveys: SW Maps, QField, Emlid Flow, ArcGIS Field Maps, Mobile Topographer."},
+{name:"Static monitoring",hz:1,msgs:["GGA","GST","ZDA","GBS","PQTMEPE","PQTMDOP"],use:"Fixed points over hours or days: deformation, benchmark checks, position averaging, accuracy logging."},
+{name:"Agriculture and machine guidance",hz:10,msgs:["GGA","VTG"],use:"Tractor guidance and auto-steer (AgOpenGPS and similar): position and course at 10 Hz with low latency."},
+{name:"Road vehicles and fleet",hz:5,msgs:["GGA","RMC","VTG","GST","PQTMVEL","PQTMODO"],use:"Vehicle tracking, telematics, road surveys and distance measurement: position, speed, course and odometer."},
+{name:"Robots and drones",hz:10,msgs:["GGA","RMC","VTG","GST"],use:"ROS nmea_navsat_driver, ArduPilot NMEA input, rovers and mowers: fast position with an accuracy estimate."},
+{name:"Marine and chart plotters",hz:1,msgs:["GGA","RMC","GLL","VTG","GSA","GSV","ZDA"],use:"OpenCPN, chart plotters and NMEA 0183 instruments: the classic navigation set with satellite view."},
+{name:"Time synchronisation",hz:1,msgs:["GGA","RMC","ZDA"],use:"gpsd/chrony and data loggers: UTC date and time. Wire the PPS pin for sub-microsecond timing."},
+{name:"Minimal (BLE, slow links)",hz:1,msgs:["GGA","RMC"],use:"Lowest bandwidth: iPhone/iPad over BLE, radio links, long recordings."},
+{name:"Research and integrity",hz:1,msgs:["GGA","RMC","GST","GSA","GSV","GBS","PQTMNAV","PQTMEPE","PQTMDOP","PQTMPL","PQTMVEL","PQTMPVT"],use:"Full diagnostics for evaluation and integrity studies: error estimates, protection levels, DOPs, velocities, RAIM. Use SPP or TCP, not BLE."}];
+function nmeaHelp(id){const m=CAT[id];return `<b>${esc(id)}</b> · ${esc(m?m.info:"Not in the built-in list; see the LG290P protocol specification.")}`}
+function chipHtml(id){const c=nmeaCounts[id];return `<button type="button" class="chip${c==null?" unseen":""}" data-t="${esc(id)}" aria-pressed="${nmeaSel.has(id)}">${esc(id)}<small>${c==null?"–":c}</small></button>`}
 function renderChips(){
-const ids=[...new Set([...NMEA_COMMON,...Object.keys(nmeaCounts),...nmeaSel])];
-$("nmeaTypes").innerHTML=ids.map(id=>{const c=nmeaCounts[id];
-return `<button type="button" class="chip${c==null?" unseen":""}" data-t="${esc(id)}" aria-pressed="${nmeaSel.has(id)}">${esc(id)}<small>${c==null?"–":c}</small></button>`}).join("");
-$("nmeaTypes").querySelectorAll(".chip").forEach(b=>{b.dataset.help=nmeaHelp(b.dataset.t);
+$("chipsStd").innerHTML=CATALOG.filter(m=>!m.ver).map(m=>chipHtml(m.id)).join("");
+$("chipsPq").innerHTML=CATALOG.filter(m=>m.ver).map(m=>chipHtml(m.id)).join("");
+const other=[...new Set([...Object.keys(nmeaCounts),...nmeaSel])].filter(id=>!CAT[id]);
+$("chipsOther").innerHTML=other.map(chipHtml).join(""); $("otherWrap").hidden=!other.length;
+document.querySelectorAll("[data-page=nmea] .chip").forEach(b=>{b.dataset.help=nmeaHelp(b.dataset.t);
 b.onclick=()=>{const t=b.dataset.t;nmeaSel.has(t)?nmeaSel.delete(t):nmeaSel.add(t);b.setAttribute("aria-pressed",nmeaSel.has(t));nmeaSelText()}});
 nmeaSelText();
 }
-function nmeaSelText(){$("nmeaSel").textContent=nmeaSel.size?"Selected: "+[...nmeaSel].join(", "):"None selected: every type is sent."}
-$("nmeaRec").onclick=()=>{nmeaSel=new Set(["GGA","RMC","GST"]);renderChips()};
+function renderProfiles(){
+$("profiles").innerHTML=PROFILES.map((p,i)=>`<button type="button" class="prof" data-p="${i}" aria-pressed="false"><b>${esc(p.name)}</b><span>${esc(p.use)}</span><code>${p.msgs.join(" ")} · ${p.hz} Hz</code></button>`).join("");
+$("profiles").querySelectorAll(".prof").forEach(b=>b.onclick=()=>{const p=PROFILES[+b.dataset.p];nmeaSel=new Set(p.msgs);$("fixHz").value=String(p.hz);renderChips()});
+}
+function bandwidth(){
+const hz=+$("fixHz").value, ids=nmeaSel.size?[...nmeaSel]:CATALOG.filter(m=>nmeaCounts[m.id]!=null).map(m=>m.id);
+return ids.reduce((a,id)=>{const m=CAT[id];return a+(m?m.bytes*(m.hz1?1:hz):80*hz)},0);
+}
+function nmeaSelText(){
+$("nmeaSel").textContent=nmeaSel.size?"Selected: "+[...nmeaSel].join(", "):"None selected: every type is sent.";
+const bw=bandwidth(), kb=(bw/1000).toFixed(bw<10000?1:0);
+$("nmeaBw").textContent=`about ${kb} kB/s · `+(bw<=2000?"fine for BLE, SPP and TCP":bw<=20000?"fine for SPP and TCP; too much for BLE":"too much for Bluetooth; use TCP or fewer messages");
+const hz=$("fixHz").value, key=[...nmeaSel].sort().join();
+$("profiles").querySelectorAll(".prof").forEach(b=>{const p=PROFILES[+b.dataset.p];b.setAttribute("aria-pressed",String(p.hz)===hz&&[...p.msgs].sort().join()===key)});
+}
+$("fixHz").onchange=nmeaSelText;
 $("nmeaAll").onclick=()=>{nmeaSel.clear();renderChips()};
+let replySeq=0;
 async function nmeaPoll(){
 if(!nmeaVisible) return;
 try{
 const d=await (await fetch("/api/nmea")).json();
+replySeq=d.replySeq||0;
 const before=Object.keys(nmeaCounts).join();
 d.types.forEach(t=>nmeaCounts[t.id]=t.count);
 if(Object.keys(nmeaCounts).join()!==before) renderChips();
-else $("nmeaTypes").querySelectorAll(".chip").forEach(b=>{const c=nmeaCounts[b.dataset.t];if(c!=null)b.querySelector("small").textContent=c});
+else document.querySelectorAll("[data-page=nmea] .chip").forEach(b=>{const c=nmeaCounts[b.dataset.t];if(c!=null)b.querySelector("small").textContent=c});
 if(!nmeaPaused){const pre=$("nmeaText");pre.textContent=d.text||"Nothing sent yet (no receiver data, or everything filtered out).";pre.scrollTop=pre.scrollHeight}
 $("nmeaRate").textContent="Active now: "+(d.filter||"all types");
 }catch(e){}
 setTimeout(nmeaPoll,1000);
 }
+// Configure the LG290P: every catalogue message on/off on the Pico's UART, fix rate, odometer, save, reset
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function sendCmd(c){const r=await fetch("/api/cmd",{method:"POST",body:c});if(!r.ok)throw new Error(await r.text())}
+$("nmeaApply").onclick=async()=>{
+const hz=+$("fixHz").value, on=new Set(nmeaSel.size?nmeaSel:CATALOG.map(m=>m.id)); on.add("GGA");
+const cmds=CATALOG.map(m=>`$PQTMCFGMSGRATE,W,${m.id},${on.has(m.id)?1:0}${m.ver?","+m.ver:""}`);
+cmds.push(`$PQTMCFGFIXRATE,W,${Math.round(1000/hz)}`);
+if(on.has("PQTMODO")&&nmeaSel.size) cmds.push("$PQTMCFGODO,W,1,0");
+cmds.push("$PQTMSAVEPAR");
+if(!confirm(`Configure the LG290P now?\n\nOn: ${[...on].join(", ")}\nOff: every other message in the list\nFix rate: ${hz} Hz\n\nThe settings are saved in the receiver, which then restarts (a few seconds without position).`))return;
+const log=$("applyLog");log.hidden=false;log.textContent="";const add=t=>{log.textContent+=t+"\n";log.scrollTop=log.scrollHeight};
+$("nmeaApply").disabled=true;
+try{
+const d0=await (await fetch("/api/nmea")).json(), start=d0.replySeq||0;
+for(const c of cmds){add("→ "+c);await sendCmd(c);await sleep(c.includes("SAVEPAR")?1200:150)}
+const d=await (await fetch("/api/nmea")).json(), n=(d.replySeq||0)-start, got=(d.replies||[]).slice(-Math.min(n,(d.replies||[]).length));
+got.forEach(r=>add("← "+r));
+const ok=got.filter(r=>/,OK[,*]/.test(r)).length, err=got.filter(r=>r.includes(",ERROR")).length;
+if(!n){add("No reply from the receiver: check that it is connected and that the UART speed matches. Nothing was changed.");return}
+await sendCmd("$PQTMSRR");add("→ $PQTMSRR (receiver restarts)");
+add(`Receiver confirmed ${ok} of ${cmds.length} settings${err?`, ${err} rejected (see above)`:""}.`);
+add("Now press Save and restart so the Pico sends the selected types to Bluetooth and TCP.");
+$("saveBar").hidden=false;msg("Receiver configured. Press Save and restart to store the Bluetooth/TCP selection.","ok");
+}catch(x){add("Failed: "+x.message)}
+finally{$("nmeaApply").disabled=false}
+};
+// Read the receiver's current fix rate when the page opens
+async function readFixRate(){
+try{const d0=await (await fetch("/api/nmea")).json();await sendCmd("$PQTMCFGFIXRATE,R");await sleep(700);
+const d=await (await fetch("/api/nmea")).json();if((d.replySeq||0)===(d0.replySeq||0))return;
+const r=(d.replies||[]).reverse().find(x=>x.startsWith("$PQTMCFGFIXRATE,OK,"));
+if(r){const ms=parseInt(r.split(",")[2]),hz=Math.round(1000/ms);if([1,2,5,10].includes(hz)){$("fixHz").value=String(hz);nmeaSelText()}}
+}catch(e){}
+}
+renderProfiles();
 $("nmeaPause").onclick=()=>{nmeaPaused=!nmeaPaused;$("nmeaPause").textContent=nmeaPaused?"Resume":"Pause"};
 $("reboot").onclick=async()=>{if(!confirm("Restart the Pico now?\n\nThe correction stream and Bluetooth/TCP links drop for about 20 s."))return;await fetch("/api/reboot",{method:"POST"});setTimeout(()=>location.reload(),8000)};
 $("sendCmd").onclick=async()=>{const r=await fetch("/api/cmd",{method:"POST",body:$("cmd").value});$("saveBar").hidden=false;msg(await r.text(),r.ok?"ok":"err")};
@@ -402,7 +497,8 @@ uploadLbl:"Load a settings file saved from this or another PicoRTK. It replaces 
 reboot:"Restart the Pico. Corrections and Bluetooth/TCP links drop for about 20 s.",
 shutdown:"Stop everything safely and halt, so the Pico can be unplugged.",
 save:"Store the settings on all tabs in flash and restart the Pico to apply them.",
-nmeaRec:"Select the usual set for RTK apps: position and fix quality (GGA), date and speed (RMC), accuracy (GST).",
+nmeaApply:"Switch the selected messages on and every other listed message off in the LG290P (GGA always stays on, the Pico needs it), set the fix rate, save in the receiver and restart it. The replies are shown below.",
+fixHz:"Position updates per second in the receiver. 1 Hz for static and walking work, 5-10 Hz for vehicles, machines and drones. GSA and GSV stay at 1 Hz. Read from the receiver when this tab opens.",
 nmeaAll:"Clear the selection: every type the receiver outputs is sent."};
 const KVHELP={
 "Fix":"Fix quality from GGA. RTK fixed = centimetre level; RTK float = decimetre level, still converging; GNSS = metre level.",
@@ -415,7 +511,7 @@ const KVHELP={
 "Last frame":"Time since the last valid RTCM frame from the caster.",
 "Bytes on stream":"Bytes received on the current connection. Stuck at 0 with a 200 OK reply usually means the mount point needs a position (GGA).",
 "Frames / CRC errors":"Valid RTCM frames since start-up, and frames rejected by the CRC check.",
-"GGA sent":"Positions sent to casters since start-up, and the last one sent.",
+"GGA sent":"Positions sent to casters since start-up, and the UTC time of the last one. The full sentence is at the end of Correction events.",
 "Base id (1005)":"Reference station id from RTCM message 1005/1006 in the correction stream.",
 "Failovers":"Number of source changes since start-up.",
 "Last event":"Latest correction event; the full list is under Correction events.",

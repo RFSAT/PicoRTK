@@ -242,6 +242,12 @@ void webSetup()
             o["count"] = nmeaTypes[i].count;
             o["sent"] = nmeaTypes[i].sent;
         }
+        // Receiver replies, oldest first
+        JsonArray r = d["replies"].to<JsonArray>();
+        uint32_t first = rxReplySeq > RX_REPLIES ? rxReplySeq - RX_REPLIES : 0;
+        for (uint32_t k = first; k < rxReplySeq; k++)
+            r.add(rxReplies[k % RX_REPLIES]);
+        d["replySeq"] = rxReplySeq;
         mutex_exit(&typesMutex);
         d["filter"] = cfg.nmeaTypes;
         d["text"] = outputsMonitor();

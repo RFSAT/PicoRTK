@@ -85,6 +85,19 @@ static void testNmea()
     const char *pq = "$PQTMEPE,2,0.012,0.010,0.025,0.016,0.030*6E";
     CHECK(nmeaSentenceId(pq, strlen(pq), id, sizeof(id)) && strcmp(id, "PQTMEPE") == 0);
 
+    // Command replies vs periodic messages; long proprietary ids fit
+    const char *r1 = "$PQTMCFGMSGRATE,OK*29";
+    const char *r2 = "$PQTMCFGMSGRATE,ERROR,1*xx";
+    const char *r3 = "$PQTMVERNO,LG290P03AANR01A06S,2024/11/27,17:28:51*3F";
+    const char *r4 = "$PQTMCFGODO,OK,1,10.5*1D";
+    CHECK(nmeaIsReply(r1, strlen(r1)) && nmeaIsReply(r2, strlen(r2)) && nmeaIsReply(r3, strlen(r3)) && nmeaIsReply(r4, strlen(r4)));
+    CHECK(!nmeaIsReply(pq, strlen(pq)) && !nmeaIsReply(gsv, strlen(gsv)));
+    const char *okv = "$PQTMODO,1,120635.000,1,112.3*6E";
+    CHECK(!nmeaIsReply(okv, strlen(okv)));
+    const char *gf = "$PQTMGEOFENCESTATUS,1,120635.000,0,0,0,0*00";
+    char id20[NMEA_ID_MAX];
+    CHECK(nmeaSentenceId(gf, strlen(gf), id20, sizeof(id20)) && strcmp(id20, "PQTMGEOFENCESTATUS") == 0);
+
     // nmeaFinish keeps an existing checksum
     char out[64];
     nmeaFinish("$PQTMVERNO*58", out, sizeof(out));

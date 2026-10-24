@@ -39,13 +39,17 @@ extern Stats stats;
 static const int MAX_NMEA_TYPES = 24;
 struct NmeaTypeStat
 {
-    char id[12];
+    char id[NMEA_ID_MAX];
     uint32_t count;
     bool sent; // passes the output filter
 };
 extern NmeaTypeStat nmeaTypes[MAX_NMEA_TYPES];
 extern int nmeaTypeCount;
 extern mutex_t typesMutex;
+// Replies of the receiver to commands ($PQTM...,OK / ERROR, version, id), for the web page
+static const int RX_REPLIES = 24;
+extern char rxReplies[RX_REPLIES][NMEA_MAX + 1];
+extern uint32_t rxReplySeq; // total replies since start-up; newest is at (rxReplySeq-1) % RX_REPLIES
 extern std::atomic<bool> core1Halt; // safe shutdown: core 1 stops touching the UART
 
 // Copy the latest GGA (thread-safe). Returns false when none has arrived yet.

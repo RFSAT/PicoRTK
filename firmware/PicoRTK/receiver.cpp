@@ -17,9 +17,11 @@ NmeaTypeStat nmeaTypes[MAX_NMEA_TYPES];
 int nmeaTypeCount = 0;
 mutex_t typesMutex;
 std::atomic<bool> core1Halt{false};
+char rxReplies[RX_REPLIES][NMEA_MAX + 1];
+uint32_t rxReplySeq = 0;
 
 // Output filter, parsed once from cfg.nmeaTypes
-static char allowIds[MAX_NMEA_TYPES][12];
+static char allowIds[MAX_NMEA_TYPES][NMEA_ID_MAX];
 static int allowCount = 0;
 
 static void parseFilter()
@@ -102,9 +104,26 @@ void receiverSetup1()
 static void handleSentence(const char *s, size_t len)
 {
     stats.nmeaGood.store(nmea.good());
-    char id[12];
+    char id[NMEA_ID_MAX];
     bool send = true;
-    if (nmeaSentenceId(s, len, id, sizeof(id)))
+    if (nmeaIsReply(s, len))
+    {
+        // Command replies: kept for the web page, not counted as message types
+        mutex_enter_blocking(&typesMutex);
+        size_t n = len;
+        while (n && (s[n - 1] == '\r' || s[n - 1] == '\n'))
+            n--;
+        if (n > NMEA_MAX)
+            n = NMEA_MAX;
+        char *dst = rxReplies[rxReplySeq % RX_REPLIES];
+        memcpy(dst, s, n);
+        dst[n] = 0;
+        rxReplySeq++;
+        mutex_exit(&typesMutex);
+        if (nmeaSentenceId(s, len, id, sizeof(id)))
+            send = allowed(id);
+    }
+    else if (nmeaSentenceId(s, len, id, sizeof(id)))
     {
         send = allowed(id);
         countType(id, send);
