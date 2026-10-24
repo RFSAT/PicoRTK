@@ -65,14 +65,26 @@ pre{margin:0;background:var(--code);color:var(--codeink);font:12.5px/1.5 var(--m
 #msg{font:13px var(--mono)} #msg.err{color:var(--err)} #msg.ok{color:var(--ok)}
 [hidden]{display:none!important}
 /* NMEA application profiles */
-.profiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,250px),1fr));gap:8px}
-.prof{text-align:left;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;cursor:pointer;display:flex;flex-direction:column;gap:3px}
+.profiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,190px),1fr));gap:5px}
+.prof{text-align:left;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:4px 8px;cursor:pointer;display:flex;flex-direction:column;gap:0;min-width:0}
+.prof code{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .prof b{font-size:14px}
 .prof span{font-size:13px;color:var(--muted)}
 .prof code{font:12px var(--mono);color:var(--ink)}
 .prof[aria-pressed=true]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
 .prof[aria-pressed=true] b{color:var(--accent)}
 .grp{font:600 11px var(--sans);color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin:8px 0 4px}
+/* NMEA tab: group label beside its buttons, small gaps */
+.cgrp{display:grid;grid-template-columns:84px 1fr;gap:4px 8px;align-items:start;margin-top:6px}
+.cgrp .grp{margin:5px 0 0}
+[data-page=nmea] .chips{gap:4px}
+[data-page=nmea] .chip{padding:3px 9px}
+[data-page=nmea] h2{margin-bottom:4px}
+[data-page=nmea] .hint{margin-bottom:6px}
+.nctl{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin-top:8px}
+.nctl select{width:auto;padding:4px 6px}
+.nctl .btn{padding:5px 10px}
+@media (max-width:600px){.cgrp{grid-template-columns:1fr}.cgrp .grp{margin:2px 0 0}.profiles{grid-template-columns:1fr 1fr}.prof code{display:none}.prof b{font-size:13px;line-height:1.25}}
 /* NMEA type toggles */
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{font:600 13px var(--mono);border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:16px;padding:5px 11px;cursor:pointer;display:inline-flex;gap:6px;align-items:baseline}
@@ -180,26 +192,19 @@ dt[data-help],th[data-help]{text-decoration:underline dotted var(--muted);text-u
 
 <div data-page="nmea" hidden>
   <section>
-    <h2>Application profiles</h2>
-    <p class="hint">Each profile is a tested set of LG290P messages and a fix rate for one kind of use. Pick one, adjust the messages below if needed, then press <b>Apply to receiver</b> (the LG290P outputs only what is switched on) and <b>Save and restart</b> (the Pico sends only the selected types to Bluetooth and TCP).</p>
+    <h2>Profiles and messages</h2>
+    <p class="hint">Pick a profile or press message types (hover or tap for details), then <b>Apply to receiver</b> and <b>Save and restart</b>. None selected = everything is sent. USB always carries the full stream.</p>
     <div class="profiles" id="profiles"></div>
-  </section>
-  <section>
-    <h2>Messages sent to Bluetooth and TCP</h2>
-    <p class="hint">Press a type to send it; press again to stop. With none selected, everything the receiver outputs is sent. Hover over (or tap) a type to see what it carries. The number is how many arrived since start-up; a dashed outline means the receiver is not outputting it at the moment. USB always carries the full receiver stream.</p>
-    <div class="grp">Standard NMEA 0183</div><div class="chips" id="chipsStd"></div>
-    <div class="grp">Quectel proprietary</div><div class="chips" id="chipsPq"></div>
-    <div id="otherWrap" hidden><div class="grp">Other, seen from the receiver</div><div class="chips" id="chipsOther"></div></div>
-    <div class="grid" style="margin-top:10px">
-      <label>Fix rate<select id="fixHz"><option value="1">1 Hz</option><option value="2">2 Hz</option><option value="5">5 Hz</option><option value="10">10 Hz</option></select></label>
-      <label class="wide" style="justify-content:flex-end">Estimated output<span class="hint" id="nmeaBw" style="margin:0;text-transform:none;letter-spacing:0;font-size:13px"></span></label>
-    </div>
-    <div class="row" style="margin-top:10px">
+    <div class="cgrp"><div class="grp">NMEA 0183</div><div class="chips" id="chipsStd"></div></div>
+    <div class="cgrp"><div class="grp">Quectel</div><div class="chips" id="chipsPq"></div></div>
+    <div class="cgrp" id="otherWrap" hidden><div class="grp">Other</div><div class="chips" id="chipsOther"></div></div>
+    <div class="nctl">
+      <select id="fixHz" aria-label="Fix rate"><option value="1">1 Hz</option><option value="2">2 Hz</option><option value="5">5 Hz</option><option value="10">10 Hz</option></select>
       <button class="btn" id="nmeaApply" type="button">Apply to receiver</button>
-      <button class="btn" id="nmeaAll" type="button">Clear (send all)</button>
-      <span class="hint" id="nmeaSel"></span>
+      <button class="btn" id="nmeaAll" type="button">Clear</button>
+      <span class="hint" id="nmeaBw" style="margin:0"></span>
     </div>
-    <pre id="applyLog" hidden style="margin-top:8px;max-height:200px"></pre>
+    <pre id="applyLog" hidden style="margin-top:6px;max-height:140px"></pre>
   </section>
   <section>
     <div class="row" style="justify-content:space-between"><h2>Live output</h2><span class="row"><span class="hint" id="nmeaRate"></span><button class="btn" id="nmeaPause" type="button">Pause</button></span></div>
@@ -397,7 +402,7 @@ function renderChips(){
   nmeaSelText();
 }
 function renderProfiles(){
-  $("profiles").innerHTML=PROFILES.map((p,i)=>`<button type="button" class="prof" data-p="${i}" aria-pressed="false"><b>${esc(p.name)}</b><span>${esc(p.use)}</span><code>${p.msgs.join(" ")} · ${p.hz} Hz</code></button>`).join("");
+  $("profiles").innerHTML=PROFILES.map((p,i)=>`<button type="button" class="prof" data-p="${i}" aria-pressed="false" data-help="${esc("<b>"+esc(p.name)+"</b> · "+esc(p.use)+" Messages: "+p.msgs.join(", ")+" at "+p.hz+" Hz.")}"><b>${esc(p.name)}</b><code>${p.hz} Hz · ${p.msgs.join(" ")}</code></button>`).join("");
   $("profiles").querySelectorAll(".prof").forEach(b=>b.onclick=()=>{const p=PROFILES[+b.dataset.p];nmeaSel=new Set(p.msgs);$("fixHz").value=String(p.hz);renderChips()});
 }
 function bandwidth(){
@@ -405,9 +410,8 @@ function bandwidth(){
   return ids.reduce((a,id)=>{const m=CAT[id];return a+(m?m.bytes*(m.hz1?1:hz):80*hz)},0);
 }
 function nmeaSelText(){
-  $("nmeaSel").textContent=nmeaSel.size?"Selected: "+[...nmeaSel].join(", "):"None selected: every type is sent.";
   const bw=bandwidth(), kb=(bw/1000).toFixed(bw<10000?1:0);
-  $("nmeaBw").textContent=`about ${kb} kB/s · `+(bw<=2000?"fine for BLE, SPP and TCP":bw<=20000?"fine for SPP and TCP; too much for BLE":"too much for Bluetooth; use TCP or fewer messages");
+  $("nmeaBw").textContent=(nmeaSel.size?"":"All types · ")+`≈ ${kb} kB/s · `+(bw<=2000?"OK for BLE, SPP, TCP":bw<=20000?"SPP/TCP only, too much for BLE":"too much for Bluetooth");
   const hz=$("fixHz").value, key=[...nmeaSel].sort().join();
   $("profiles").querySelectorAll(".prof").forEach(b=>{const p=PROFILES[+b.dataset.p];b.setAttribute("aria-pressed",String(p.hz)===hz&&[...p.msgs].sort().join()===key)});
 }
@@ -512,7 +516,8 @@ const HELP={
   save:"Store the settings on all tabs in flash and restart the Pico to apply them.",
   nmeaApply:"Switch the selected messages on and every other listed message off in the LG290P (GGA always stays on, the Pico needs it), set the fix rate, save in the receiver and restart it. The replies are shown below.",
   fixHz:"Position updates per second in the receiver. 1 Hz for static and walking work, 5-10 Hz for vehicles, machines and drones. GSA and GSV stay at 1 Hz. Read from the receiver when this tab opens.",
-  nmeaAll:"Clear the selection: every type the receiver outputs is sent."};
+  nmeaAll:"Clear the selection: every type the receiver outputs is sent.",
+  nmeaBw:"Estimated data rate of the selection at this fix rate. BLE manages about 2 kB/s; Bluetooth SPP and TCP much more."};
 const KVHELP={
   "Fix":"Fix quality from GGA. RTK fixed = centimetre level; RTK float = decimetre level, still converging; GNSS = metre level.",
   "HDOP":"Horizontal dilution of precision: satellite geometry. Below 1 is good; above 2 is poor.",
