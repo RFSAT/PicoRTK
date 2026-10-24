@@ -81,7 +81,7 @@ Settings live in a separate flash area and survive firmware updates.
   - Tick the types to send, e.g. GGA, RMC and GST, then press **Save and restart**. With none ticked, everything is sent.
   - The filter applies to Bluetooth and TCP only. USB always carries the full receiver stream.
   - To cut the load at the source, also turn unwanted messages off in the receiver.
-- **System → Shut down** (click twice to confirm):
+- **System → Shut down** (asks for confirmation; so do Restart, Save and restart, and Upload settings):
   - It closes the caster connection, stops Bluetooth, TCP and the receiver link, turns the radio off and halts.
   - Unplug once the LEDs are off.
   - To start again, power it up or briefly short RUN (pin 30) to GND.

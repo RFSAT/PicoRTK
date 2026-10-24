@@ -265,12 +265,13 @@ const t=await r.text(); if(!r.ok) throw new Error(t); return t;
 }
 $("save").onclick=async()=>{
 const c=collect(),e=check(c); if(e){msg(e,"err");return}
+if(!confirm("Save the settings and restart the Pico now?\n\nThe correction stream and Bluetooth/TCP links drop for about 20 s."))return;
 try{msg(await post(JSON.stringify(c)),"ok");setTimeout(()=>location.reload(),9000)}catch(x){msg(x.message,"err")}
 };
 $("upload").onchange=ev=>{const f=ev.target.files[0];if(!f)return;const rd=new FileReader();
-rd.onload=async()=>{try{JSON.parse(rd.result);$("saveBar").hidden=false;msg(await post(rd.result),"ok");setTimeout(()=>location.reload(),9000)}catch(x){$("saveBar").hidden=false;msg("Upload failed: "+x.message,"err")}};rd.readAsText(f)};
+rd.onload=async()=>{if(!confirm("Replace all settings with "+f.name+" and restart the Pico?")){ev.target.value="";return}try{JSON.parse(rd.result);$("saveBar").hidden=false;msg(await post(rd.result),"ok");setTimeout(()=>location.reload(),9000)}catch(x){$("saveBar").hidden=false;msg("Upload failed: "+x.message,"err")}};rd.readAsText(f)};
 $("shutdown").onclick=async()=>{
-if(!$("shutdown").dataset.armed){$("shutdown").dataset.armed=1;$("shutdown").textContent="Click again to shut down";setTimeout(()=>{delete $("shutdown").dataset.armed;$("shutdown").textContent="Shut down"},4000);return}
+if(!confirm("Shut down the Pico?\n\nIt closes the correction stream and the Bluetooth/TCP links, switches the radio off and halts. Unplug once the LEDs are off. To start it again, power it up."))return;
 const r=await fetch("/api/shutdown",{method:"POST"});$("saveBar").hidden=false;msg(await r.text(),r.ok?"ok":"err");
 };
 // NMEA monitor and type filter
@@ -287,7 +288,7 @@ $("nmeaRate").textContent=d.filter?("Filter: "+d.filter):"Filter: all types";
 setTimeout(nmeaPoll,1000);
 }
 $("nmeaPause").onclick=()=>{nmeaPaused=!nmeaPaused;$("nmeaPause").textContent=nmeaPaused?"Resume":"Pause"};
-$("reboot").onclick=async()=>{await fetch("/api/reboot",{method:"POST"});setTimeout(()=>location.reload(),8000)};
+$("reboot").onclick=async()=>{if(!confirm("Restart the Pico now?\n\nThe correction stream and Bluetooth/TCP links drop for about 20 s."))return;await fetch("/api/reboot",{method:"POST"});setTimeout(()=>location.reload(),8000)};
 $("sendCmd").onclick=async()=>{const r=await fetch("/api/cmd",{method:"POST",body:$("cmd").value});$("saveBar").hidden=false;msg(await r.text(),r.ok?"ok":"err")};
 $("scan").onclick=async()=>{$("scanOut").textContent="scanning…";try{const l=await (await fetch("/api/scan")).json();
 $("scanOut").textContent=l.map(n=>`${n.ssid} (${n.rssi} dBm)`).join(", ")||"none found"}catch{$("scanOut").textContent="scan failed"}};
