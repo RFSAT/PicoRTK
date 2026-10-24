@@ -78,6 +78,13 @@ static void testNmea()
     bl = nmeaMakeGga(-33.5, -70.25, 0, 0, bench, sizeof(bench));
     CHECK(nmeaParseGga(bench, bl, b) && b.lat < -33.49 && b.lon < -70.24);
 
+    char id[16];
+    CHECK(nmeaSentenceId(gga.c_str(), gga.size(), id, sizeof(id)) && strcmp(id, "GGA") == 0);
+    const char *gsv = "$GLGSV,3,1,10,65,12,045,30*6A";
+    CHECK(nmeaSentenceId(gsv, strlen(gsv), id, sizeof(id)) && strcmp(id, "GSV") == 0);
+    const char *pq = "$PQTMEPE,2,0.012,0.010,0.025,0.016,0.030*6E";
+    CHECK(nmeaSentenceId(pq, strlen(pq), id, sizeof(id)) && strcmp(id, "PQTMEPE") == 0);
+
     // nmeaFinish keeps an existing checksum
     char out[64];
     nmeaFinish("$PQTMVERNO*58", out, sizeof(out));

@@ -13,6 +13,63 @@ Stats stats;
 std::atomic<bool> configReady{false};
 
 static NmeaAssembler nmea;
+NmeaTypeStat nmeaTypes[MAX_NMEA_TYPES];
+int nmeaTypeCount = 0;
+mutex_t typesMutex;
+std::atomic<bool> core1Halt{false};
+
+// Output filter, parsed once from cfg.nmeaTypes
+static char allowIds[MAX_NMEA_TYPES][12];
+static int allowCount = 0;
+
+static void parseFilter()
+{
+    allowCount = 0;
+    String s = cfg.nmeaTypes;
+    int from = 0;
+    while (from < (int)s.length() && allowCount < MAX_NMEA_TYPES)
+    {
+        int comma = s.indexOf(',', from);
+        if (comma < 0)
+            comma = s.length();
+        String t = s.substring(from, comma);
+        t.trim();
+        if (t.length())
+            strlcpy(allowIds[allowCount++], t.c_str(), sizeof(allowIds[0]));
+        from = comma + 1;
+    }
+}
+
+static bool allowed(const char *id)
+{
+    if (allowCount == 0)
+        return true; // no filter: everything
+    for (int i = 0; i < allowCount; i++)
+        if (strcmp(allowIds[i], id) == 0)
+            return true;
+    return false;
+}
+
+static void countType(const char *id, bool sent)
+{
+    mutex_enter_blocking(&typesMutex);
+    int i = 0;
+    for (; i < nmeaTypeCount; i++)
+        if (strcmp(nmeaTypes[i].id, id) == 0)
+            break;
+    if (i == nmeaTypeCount && nmeaTypeCount < MAX_NMEA_TYPES)
+    {
+        strlcpy(nmeaTypes[i].id, id, sizeof(nmeaTypes[i].id));
+        nmeaTypes[i].count = 0;
+        nmeaTypeCount++;
+    }
+    if (i < nmeaTypeCount)
+    {
+        nmeaTypes[i].count++;
+        nmeaTypes[i].sent = sent;
+    }
+    mutex_exit(&typesMutex);
+}
 
 bool getLatestGga(SharedGga &out)
 {
@@ -25,6 +82,7 @@ bool getLatestGga(SharedGga &out)
 void receiverInitShared()
 {
     mutex_init(&ggaMutex);
+    mutex_init(&typesMutex);
     sharedGga.len = 0;
 }
 
@@ -38,12 +96,21 @@ void receiverSetup1()
     Serial1.setFIFOSize(8192);
     Serial1.begin(cfg.uartBaud);
     pinMode(PIN_RX_RTK, INPUT_PULLDOWN);
+    parseFilter();
 }
 
 static void handleSentence(const char *s, size_t len)
 {
     stats.nmeaGood.store(nmea.good());
-    nmeaToNet.write((const uint8_t *)s, len); // drops the sentence if nobody drains the ring
+    char id[12];
+    bool send = true;
+    if (nmeaSentenceId(s, len, id, sizeof(id)))
+    {
+        send = allowed(id);
+        countType(id, send);
+    }
+    if (send)
+        nmeaToNet.write((const uint8_t *)s, len); // dropped if nobody drains the ring
     if (nmeaIsGga(s, len))
     {
         GgaInfo g;
@@ -62,6 +129,8 @@ static void handleSentence(const char *s, size_t len)
 
 void receiverLoop1()
 {
+    if (core1Halt.load())
+        return;
     uint8_t buf[512];
 
     // Receiver -> USB (raw) and NMEA extraction

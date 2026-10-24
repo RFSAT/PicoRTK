@@ -64,8 +64,9 @@ pre{margin:0;background:var(--code);color:var(--codeink);font:12.5px/1.5 var(--m
 <button data-tab="status" aria-selected="true">Status</button>
 <button data-tab="corr">Corrections</button>
 <button data-tab="net">Wi-Fi &amp; outputs</button>
+<button data-tab="nmea">NMEA</button>
 <button data-tab="rx">Receiver</button>
-<button data-tab="backup">Backup</button>
+<button data-tab="backup">System</button>
 </nav>
 <main>
 <div data-page="status">
@@ -130,6 +131,18 @@ pre{margin:0;background:var(--code);color:var(--codeink);font:12.5px/1.5 var(--m
 </div>
 </section>
 </div>
+<div data-page="nmea" hidden>
+<section>
+<h2>Messages sent to Bluetooth and TCP</h2>
+<p class="hint">Tick the sentence types to send. With none ticked, everything the receiver outputs is sent. USB always carries the full receiver stream. To save bandwidth at the source, also turn unneeded messages off in the receiver (QGNSS or the Receiver tab).</p>
+<div class="row" id="nmeaTypes" style="gap:6px 18px"></div>
+<div class="grid" style="margin-top:10px"><label class="wide">Types (comma-separated, empty = all)<input id="nmeaFilter" placeholder="GGA,RMC,GST"></label></div>
+</section>
+<section>
+<div class="row" style="justify-content:space-between"><h2>Live output</h2><span class="row"><span class="hint" id="nmeaRate"></span><button class="btn" id="nmeaPause" type="button">Pause</button></span></div>
+<pre id="nmeaText" style="max-height:60vh">Waiting for data…</pre>
+</section>
+</div>
 <div data-page="rx" hidden>
 <section>
 <h2>Receiver link</h2>
@@ -146,12 +159,13 @@ pre{margin:0;background:var(--code);color:var(--codeink);font:12.5px/1.5 var(--m
 </div>
 <div data-page="backup" hidden>
 <section>
-<h2>Settings file</h2>
+<h2>Settings file and power</h2>
 <p class="hint">Download the full settings (with passwords) to copy one tested setup to every unit. Uploading replaces the settings and restarts the device.</p>
 <div class="row">
 <a class="btn" href="/api/config?secrets=1">Download settings</a>
 <label class="btn" style="text-transform:none;font-size:14px;letter-spacing:0;color:var(--ink)">Upload settings<input type="file" id="upload" accept=".json" hidden></label>
 <button class="btn" id="reboot" type="button">Restart</button>
+<button class="btn" id="shutdown" type="button">Shut down</button>
 </div>
 </section>
 </div>
@@ -159,13 +173,14 @@ pre{margin:0;background:var(--code);color:var(--codeink);font:12.5px/1.5 var(--m
 </main>
 <script>
 const $=id=>document.getElementById(id);
-let cfg=null;
+let cfg=null, nmeaVisible=false, nmeaPaused=false;
 const TYPES={base:"Own base",vrs:"VRS",near:"Nearest station",other:"Other"};
 // Tabs
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
 document.querySelectorAll("nav button").forEach(x=>x.setAttribute("aria-selected",x===b));
 document.querySelectorAll("[data-page]").forEach(p=>p.hidden=p.dataset.page!==b.dataset.tab);
-$("saveBar").hidden=!["corr","net","rx"].includes(b.dataset.tab);
+$("saveBar").hidden=!["corr","net","rx","nmea"].includes(b.dataset.tab);
+nmeaVisible=b.dataset.tab==="nmea"; if(nmeaVisible) nmeaPoll();
 });
 function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 function kv(el,rows){el.innerHTML=rows.map(([k,v])=>`<dt>${esc(k)}</dt><dd title="${esc(String(v).replace(/<[^>]*>/g,""))}">${v}</dd>`).join("")}
@@ -221,6 +236,7 @@ let w="";for(let i=0;i<4;i++){const n=cfg.wifi[i]||{};w+=`<tr><td class="n">${i+
 $("wifi").innerHTML=w;
 $("deviceName").value=cfg.deviceName;$("bt").value=o.bt;$("tcpPort").value=o.tcpPort;$("usb").checked=o.usb;$("inboundRtcm").checked=o.inboundRtcm;
 $("adminPass").value=cfg.web.adminPass;$("apPass").value=cfg.web.apPass;
+$("nmeaFilter").value=(o.nmeaTypes||[]).join(",");
 $("uartBaud").value=String(r.uartBaud);$("bootCmds").value=(r.bootCmds||[]).join("\n");
 }
 function collect(){
@@ -233,7 +249,8 @@ return {deviceName:$("deviceName").value.trim(),web:{adminPass:$("adminPass").va
 failover:{enabled:$("failover").checked,failbackSec:+$("failbackSec").value,retryMs:cfg.failover.retryMs,backoffSec:backoff.length?backoff:[15,30,60,120,300],
 dataTimeoutSec:+$("dataTimeoutSec").value,maxAgeSec:+$("maxAgeSec").value,ggaSec:+$("ggaSec").value},
 benchPosition:{lat:+$("benchLat").value||0,lon:+$("benchLon").value||0,alt:+$("benchAlt").value||0},
-outputs:{bt:$("bt").value,usb:$("usb").checked,tcpPort:+$("tcpPort").value,inboundRtcm:$("inboundRtcm").checked},
+outputs:{bt:$("bt").value,usb:$("usb").checked,tcpPort:+$("tcpPort").value,inboundRtcm:$("inboundRtcm").checked,
+nmeaTypes:$("nmeaFilter").value.split(/[ ,;]+/).map(t=>t.trim().toUpperCase()).filter(Boolean)},
 receiver:{uartBaud:+$("uartBaud").value,bootCmds:$("bootCmds").value.split("\n").map(s=>s.trim()).filter(Boolean)}};
 }
 function check(c){
@@ -252,6 +269,24 @@ try{msg(await post(JSON.stringify(c)),"ok");setTimeout(()=>location.reload(),900
 };
 $("upload").onchange=ev=>{const f=ev.target.files[0];if(!f)return;const rd=new FileReader();
 rd.onload=async()=>{try{JSON.parse(rd.result);$("saveBar").hidden=false;msg(await post(rd.result),"ok");setTimeout(()=>location.reload(),9000)}catch(x){$("saveBar").hidden=false;msg("Upload failed: "+x.message,"err")}};rd.readAsText(f)};
+$("shutdown").onclick=async()=>{
+if(!$("shutdown").dataset.armed){$("shutdown").dataset.armed=1;$("shutdown").textContent="Click again to shut down";setTimeout(()=>{delete $("shutdown").dataset.armed;$("shutdown").textContent="Shut down"},4000);return}
+const r=await fetch("/api/shutdown",{method:"POST"});$("saveBar").hidden=false;msg(await r.text(),r.ok?"ok":"err");
+};
+// NMEA monitor and type filter
+function filterSet(){return new Set($("nmeaFilter").value.split(/[ ,;]+/).map(t=>t.trim().toUpperCase()).filter(Boolean))}
+async function nmeaPoll(){
+if(!nmeaVisible) return;
+try{
+const d=await (await fetch("/api/nmea")).json(), f=filterSet();
+$("nmeaTypes").innerHTML=d.types.length?d.types.map(t=>`<label class="check"><input type="checkbox" data-t="${esc(t.id)}"${f.has(t.id)?" checked":""}> ${esc(t.id)} <span class="hint">(${t.count}${t.sent?"":", not sent"})</span></label>`).join(""):'<span class="hint">No sentences from the receiver yet.</span>';
+$("nmeaTypes").querySelectorAll("input").forEach(cb=>cb.onchange=()=>{const s=filterSet();cb.checked?s.add(cb.dataset.t):s.delete(cb.dataset.t);$("nmeaFilter").value=[...s].join(",")});
+if(!nmeaPaused){const pre=$("nmeaText");pre.textContent=d.text||"Nothing sent yet (no receiver data, or everything filtered out).";pre.scrollTop=pre.scrollHeight}
+$("nmeaRate").textContent=d.filter?("Filter: "+d.filter):"Filter: all types";
+}catch(e){}
+setTimeout(nmeaPoll,1000);
+}
+$("nmeaPause").onclick=()=>{nmeaPaused=!nmeaPaused;$("nmeaPause").textContent=nmeaPaused?"Resume":"Pause"};
 $("reboot").onclick=async()=>{await fetch("/api/reboot",{method:"POST"});setTimeout(()=>location.reload(),8000)};
 $("sendCmd").onclick=async()=>{const r=await fetch("/api/cmd",{method:"POST",body:$("cmd").value});$("saveBar").hidden=false;msg(await r.text(),r.ok?"ok":"err")};
 $("scan").onclick=async()=>{$("scanOut").textContent="scanning…";try{const l=await (await fetch("/api/scan")).json();

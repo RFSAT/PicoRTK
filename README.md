@@ -73,6 +73,19 @@ Settings live in a separate flash area and survive firmware updates.
 - **USB log:** until the receiver is connected, the Pico's USB port prints a status line every 5 s (Wi-Fi mode, network, IP, NTRIP state). Open it with any serial terminal; the speed doesn't matter. Once receiver data flows, USB carries the receiver stream instead.
 - **Back to setup mode:** hold the GP16 button for 3 s; or, if the saved Wi-Fi isn't in range, the setup network returns by itself after about 15 s at power-up.
 
+## NMEA output, monitor and shutdown
+
+- **NMEA tab:**
+  - A live view of exactly what is sent to Bluetooth and TCP, refreshed every second; it can be paused.
+  - The sentence types seen from the receiver, each with a counter.
+  - Tick the types to send, e.g. GGA, RMC and GST, then press **Save and restart**. With none ticked, everything is sent.
+  - The filter applies to Bluetooth and TCP only. USB always carries the full receiver stream.
+  - To cut the load at the source, also turn unwanted messages off in the receiver.
+- **System → Shut down** (click twice to confirm):
+  - It closes the caster connection, stops Bluetooth, TCP and the receiver link, turns the radio off and halts.
+  - Unplug once the LEDs are off.
+  - To start again, power it up or briefly short RUN (pin 30) to GND.
+
 ## Correction-source failover
 
 | Event on the active source | Action |

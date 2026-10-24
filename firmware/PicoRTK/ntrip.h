@@ -35,6 +35,7 @@ struct NtripStatus
 };
 
 void ntripSetup();                 // after configLoad()
+void ntripStop();                  // safe shutdown: close the caster connection
 void ntripLoop(bool networkUp);    // call often from core 0
 void ntripStatus(NtripStatus &s);
 const char *ntripStateName(NtripState s);

@@ -17,3 +17,4 @@ struct OutputStatus
 };
 void outputsStatus(OutputStatus &s);
 String outputsBtName();
+String outputsMonitor(); // the last ~3 KB of NMEA sent to Bluetooth/TCP, whole lines

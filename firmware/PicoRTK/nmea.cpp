@@ -112,6 +112,29 @@ size_t nmeaMakeGga(double lat, double lon, float alt, uint32_t secOfDay, char *o
     return nmeaFinish(body, out, outSize);
 }
 
+bool nmeaSentenceId(const char *s, size_t len, char *id, size_t idSize)
+{
+    if (len < 7 || s[0] != '$' || idSize < 4)
+        return false;
+    size_t end = 1;
+    while (end < len && s[end] != ',' && s[end] != '*')
+        end++;
+    const char *start = s + 1;
+    size_t n = end - 1;
+    if (s[1] != 'P') // talker (2 chars) + type
+    {
+        if (n < 4)
+            return false;
+        start += 2;
+        n -= 2;
+    }
+    if (n >= idSize)
+        n = idSize - 1;
+    memcpy(id, start, n);
+    id[n] = 0;
+    return n > 0;
+}
+
 bool nmeaIsGga(const char *s, size_t len)
 {
     return len > 7 && s[0] == '$' && s[3] == 'G' && s[4] == 'G' && s[5] == 'A' && s[6] == ',';

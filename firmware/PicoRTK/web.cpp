@@ -16,7 +16,7 @@
 #endif
 
 static WebServer server(80);
-static uint32_t rebootAt = 0;
+static uint32_t rebootAt = 0, shutdownAt = 0;
 
 static bool auth()
 {
@@ -223,6 +223,33 @@ void webSetup()
         server.send(200, "text/plain", "Restarting");
         rebootAt = millis() + 1000;
     });
+    server.on("/api/shutdown", HTTP_POST, []() {
+        if (!auth())
+            return;
+        server.send(200, "text/plain", "Shutting down. Wait until the LEDs are off (about 2 s), then unplug.");
+        shutdownAt = millis() + 1000;
+    });
+    server.on("/api/nmea", HTTP_GET, []() {
+        if (!auth())
+            return;
+        JsonDocument d;
+        JsonArray a = d["types"].to<JsonArray>();
+        mutex_enter_blocking(&typesMutex);
+        for (int i = 0; i < nmeaTypeCount; i++)
+        {
+            JsonObject o = a.add<JsonObject>();
+            o["id"] = nmeaTypes[i].id;
+            o["count"] = nmeaTypes[i].count;
+            o["sent"] = nmeaTypes[i].sent;
+        }
+        mutex_exit(&typesMutex);
+        d["filter"] = cfg.nmeaTypes;
+        d["text"] = outputsMonitor();
+        String js;
+        serializeJson(d, js);
+        server.sendHeader("Cache-Control", "no-store");
+        server.send(200, "application/json", js);
+    });
     server.onNotFound([]() { server.send(404, "text/plain", "Not found"); });
     server.begin();
 }
@@ -230,6 +257,8 @@ void webSetup()
 void webLoop()
 {
     server.handleClient();
+    if (shutdownAt && (int32_t)(millis() - shutdownAt) > 0)
+        safeShutdown();
     if (rebootAt && (int32_t)(millis() - rebootAt) > 0)
         safeReboot();
 }

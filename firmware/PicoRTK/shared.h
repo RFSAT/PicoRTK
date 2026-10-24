@@ -35,5 +35,18 @@ struct Stats
 };
 extern Stats stats;
 
+// NMEA sentence types seen from the receiver (core 1 writes, core 0 reads under typesMutex)
+static const int MAX_NMEA_TYPES = 24;
+struct NmeaTypeStat
+{
+    char id[12];
+    uint32_t count;
+    bool sent; // passes the output filter
+};
+extern NmeaTypeStat nmeaTypes[MAX_NMEA_TYPES];
+extern int nmeaTypeCount;
+extern mutex_t typesMutex;
+extern std::atomic<bool> core1Halt; // safe shutdown: core 1 stops touching the UART
+
 // Copy the latest GGA (thread-safe). Returns false when none has arrived yet.
 bool getLatestGga(SharedGga &out);

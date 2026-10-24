@@ -398,6 +398,13 @@ void ntripLoop(bool networkUp)
     }
 }
 
+void ntripStop()
+{
+    closeClient();
+    event("stopped for shutdown");
+    setState(NtripState::Off);
+}
+
 bool ntripStreaming() { return state == NtripState::Streaming; }
 
 void ntripStatus(NtripStatus &s)

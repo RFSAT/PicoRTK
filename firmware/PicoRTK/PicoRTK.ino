@@ -20,6 +20,7 @@
 #include <WiFi.h>
 #include <hardware/gpio.h>
 #include <hardware/watchdog.h>
+#include <hardware/structs/watchdog.h>
 #include <stdarg.h>
 
 #ifndef PICORTK_VERSION
@@ -63,6 +64,27 @@ void safeReboot()
     watchdog_reboot(0, 0, 10);
     while (true)
         tight_loop_contents();
+}
+
+void safeShutdown()
+{
+    dbg("[boot] shutting down\r\n");
+    ntripStop();
+    outputsStop();
+    core1Halt = true;      // core 1 stops using the UART and USB
+    delay(100);
+    Serial1.flush();
+    wdtArmed = false;
+    hw_clear_bits(&watchdog_hw->ctrl, WATCHDOG_CTRL_ENABLE_BITS); // no automatic restart
+    // LEDs off, radio off (the on-board LED is driven by the radio chip, so it goes dark too)
+    digitalWrite(14, LOW);
+    digitalWrite(15, LOW);
+    gpio_init(23);
+    gpio_set_dir(23, GPIO_OUT);
+    gpio_put(23, 0);
+    dbg("[boot] halted, safe to unplug\r\n");
+    while (true)
+        __wfi();
 }
 
 static const char *resetReasonName()

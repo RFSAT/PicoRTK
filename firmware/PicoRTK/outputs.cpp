@@ -16,6 +16,35 @@ static RtcmFramer inFramer;
 static uint32_t sentBytes = 0, inboundFrames = 0;
 static String btName;
 
+// Tail of what was sent, for the web NMEA monitor
+static const size_t MON_SIZE = 3072;
+static char monBuf[MON_SIZE];
+static size_t monHead = 0, monFill = 0;
+
+static void monitorAdd(const uint8_t *p, size_t n)
+{
+    for (size_t i = 0; i < n; i++)
+    {
+        monBuf[monHead] = (char)p[i];
+        monHead = (monHead + 1) % MON_SIZE;
+        if (monFill < MON_SIZE)
+            monFill++;
+    }
+}
+
+String outputsMonitor()
+{
+    String s;
+    s.reserve(monFill + 1);
+    size_t start = (monHead + MON_SIZE - monFill) % MON_SIZE;
+    for (size_t i = 0; i < monFill; i++)
+        s += monBuf[(start + i) % MON_SIZE];
+    int nl = s.indexOf('\n'); // drop the first, possibly cut, line
+    if (monFill == MON_SIZE && nl >= 0)
+        s.remove(0, nl + 1);
+    return s;
+}
+
 String outputsBtName() { return btName; }
 
 void outputsSetup()
@@ -119,6 +148,7 @@ void outputsLoop(bool ntripStreaming)
             if (c.connected())
                 c.write(buf, n);
         sentBytes += n;
+        monitorAdd(buf, n);
     }
 
     // Inbound bytes: RTCM from apps that run their own NTRIP client

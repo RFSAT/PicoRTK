@@ -50,6 +50,7 @@ struct Config
     bool usb = true;     // receiver stream on USB (also bridges USB input to the receiver)
     uint16_t tcpPort = 2947; // NMEA TCP server, 0 = off
     bool inboundRtcm = true; // accept RTCM from Bluetooth/TCP clients when NTRIP is not streaming
+    String nmeaTypes;        // sentence types sent to Bluetooth/TCP, comma-separated ("GGA,RMC,GST"); empty = all
 
     // Receiver
     uint32_t uartBaud = 460800;

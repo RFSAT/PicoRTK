@@ -89,6 +89,21 @@ String configToJson(bool withSecrets)
     out["usb"] = cfg.usb;
     out["tcpPort"] = cfg.tcpPort;
     out["inboundRtcm"] = cfg.inboundRtcm;
+    JsonArray nt = out["nmeaTypes"].to<JsonArray>();
+    {
+        int from = 0;
+        while (from < (int)cfg.nmeaTypes.length())
+        {
+            int comma = cfg.nmeaTypes.indexOf(',', from);
+            if (comma < 0)
+                comma = cfg.nmeaTypes.length();
+            String t = cfg.nmeaTypes.substring(from, comma);
+            t.trim();
+            if (t.length())
+                nt.add(t);
+            from = comma + 1;
+        }
+    }
 
     JsonObject r = d["receiver"].to<JsonObject>();
     r["uartBaud"] = cfg.uartBaud;
@@ -212,6 +227,22 @@ bool configFromJson(const String &json, String &err)
         getNum(o["usb"], c.usb);
         getNum(o["tcpPort"], c.tcpPort);
         getNum(o["inboundRtcm"], c.inboundRtcm);
+        if (o["nmeaTypes"].is<JsonArrayConst>())
+        {
+            String list;
+            for (JsonVariantConst v : o["nmeaTypes"].as<JsonArrayConst>())
+            {
+                String t = v.as<String>();
+                t.trim();
+                t.toUpperCase();
+                if (!t.length() || t.length() > 10)
+                    continue;
+                if (list.length())
+                    list += ",";
+                list += t;
+            }
+            c.nmeaTypes = list;
+        }
     }
 
     JsonVariantConst r = d["receiver"];
