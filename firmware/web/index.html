@@ -76,7 +76,6 @@ pre{margin:0;background:var(--code);color:var(--codeink);font:12.5px/1.5 var(--m
     <div>
       <h2>PicoRTK · RTK GNSS rover</h2>
       <p>PicoRTK turns a Raspberry Pi Pico 2 W and a Quectel LG290P quad-band receiver (L1, L2, L5, E6) into a centimetre-level RTK rover. The Pico fetches RTCM corrections over Wi-Fi from up to four NTRIP sources in priority order: your own base, a VRS, the nearest network station, then a public caster. It switches to the next source automatically when one fails. Every correction frame is checked before it reaches the receiver. Without internet, the receiver can fall back to Galileo HAS (about 20 cm).</p>
-      <p>Positions go out as NMEA over Bluetooth (Classic SPP for Android and Windows, BLE for iOS), over TCP on the local network, and over USB. Use the tabs above to set up corrections, Wi-Fi and outputs, to watch the NMEA stream, and to save or restore the settings.</p>
     </div>
     <div class="credit">
       <strong>RFSAT Limited</strong><br>
