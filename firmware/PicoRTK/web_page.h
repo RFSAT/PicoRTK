@@ -43,7 +43,7 @@ textarea{min-height:90px}
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}
 .tiles section{min-width:0}
 .about{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px 28px;align-items:start}
-.about p{margin:0 0 8px;max-width:95ch}
+.about p{margin:0 0 8px}
 .about .credit{border-left:3px solid var(--accent);padding-left:12px;font-size:14px;line-height:1.5;min-width:200px}
 .about a{color:var(--accent)}
 @media (max-width:700px){.about{grid-template-columns:1fr}}
