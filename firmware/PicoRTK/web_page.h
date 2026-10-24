@@ -14,43 +14,45 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(<!doctype html>
 @media (prefers-color-scheme:dark){:root{--bg:#0e1514;--panel:#16201f;--ink:#e3ecea;--muted:#93a5a2;--line:#2a3836;--accent:#3fbfa6;--on:#06201b;--ok:#5cc97b;--warn:#e3a54a;--err:#ff8a80;--code:#081110;--codeink:#bfe6dc;color-scheme:dark}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 var(--sans)}
-header{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;padding:14px 16px;border-bottom:2px solid var(--ink)}
+header{display:flex;flex-wrap:wrap;gap:2px 14px;align-items:baseline;padding:8px 12px;border-bottom:2px solid var(--ink)}
 h1{margin:0;font-size:22px;letter-spacing:.02em}
 header small{color:var(--muted);font-family:var(--mono)}
-nav{display:flex;gap:4px;padding:8px 16px;overflow-x:auto}
-nav button{border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:6px 12px;border-radius:4px;font:inherit;cursor:pointer;white-space:nowrap}
+nav{display:flex;gap:4px;padding:6px 12px;overflow-x:auto}
+nav button{border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:5px 10px;border-radius:4px;font:inherit;cursor:pointer;white-space:nowrap}
 nav button[aria-selected=true]{background:var(--accent);border-color:var(--accent);color:var(--on)}
-main{max-width:none;margin:0;padding:8px 16px 40px;display:flex;flex-direction:column;gap:14px}
-section{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px}
-h2{margin:0 0 8px;font-size:16px}
-.hint{margin:0 0 10px;color:var(--muted);font-size:13px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px 12px}
+main{max-width:none;margin:0;padding:4px 12px 24px;display:flex;flex-direction:column;gap:10px}
+section{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+h2{margin:0 0 6px;font-size:16px}
+.hint{margin:0 0 8px;color:var(--muted);font-size:13px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,140px),1fr));gap:8px 10px}
 .wide{grid-column:1/-1}
-label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;min-width:0}
+label{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;min-width:0}
 label.check{flex-direction:row;align-items:center;gap:8px;text-transform:none;font-size:14px;color:var(--ink);letter-spacing:0}
-input,select,textarea{font:14px var(--mono);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:7px 8px;width:100%}
+input,select,textarea{font:14px var(--mono);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:5px 7px;width:100%}
 label.check input{width:auto}
 /* Same row = same height; caption on top, field at the bottom, so fields line up even when a caption wraps */
 .grid>label:not(.check){justify-content:space-between}
-.grid>label.check{align-self:end;min-height:34px}
-textarea{min-height:90px}
+.grid>label.check{align-self:end;min-height:30px}
+textarea{min-height:80px}
 :focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-.btn{font:500 14px var(--sans);border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:4px;padding:8px 14px;cursor:pointer}
+.btn{font:500 14px var(--sans);border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:4px;padding:6px 12px;cursor:pointer}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on)}
-.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:14px}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:14px}
 .kv dt{color:var(--muted);white-space:nowrap} .kv dd{margin:0;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:10px}
 .tiles section{min-width:0}
-.about{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px 28px;align-items:start}
-.about p{margin:0 0 8px}
+.about{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 20px;align-items:start}
+.about p{margin:0 0 6px}
 .about .credit{border-left:3px solid var(--accent);padding-left:12px;font-size:14px;line-height:1.5;min-width:200px}
 .about a{color:var(--accent)}
-@media (max-width:700px){.about{grid-template-columns:1fr}}
+@media (max-width:700px){.about{grid-template-columns:1fr}.about .credit{min-width:0}}
+/* Phones: thinner margins, same font sizes */
+@media (max-width:600px){header,nav{padding-left:8px;padding-right:8px}main{padding:4px 6px 16px;gap:8px}section{padding:8px}.grid{gap:6px 8px}.kv dt{white-space:normal}}
 .tbl{overflow-x:auto}
 .tbl table{border-collapse:collapse;width:100%}
-.tbl th{font:600 11px var(--sans);color:var(--muted);text-transform:uppercase;letter-spacing:.03em;text-align:left;padding:4px 6px;white-space:nowrap}
-.tbl td{padding:4px 6px;vertical-align:middle}
+.tbl th{font:600 11px var(--sans);color:var(--muted);text-transform:uppercase;letter-spacing:.03em;text-align:left;padding:3px 4px;white-space:nowrap}
+.tbl td{padding:2px 4px;vertical-align:middle}
 .tbl td.n{font:600 13px var(--mono);color:var(--muted);white-space:nowrap}
 .tbl input,.tbl select{min-width:70px}
 .tbl td.c{text-align:center}
@@ -58,7 +60,7 @@ textarea{min-height:90px}
 .tbl tr.active td.n{color:var(--accent)}
 .pill{display:inline-block;font:600 12px var(--mono);padding:2px 8px;border-radius:10px;border:1px solid currentColor}
 .q4{color:var(--ok)} .q5{color:var(--warn)} .q0,.q1,.q2{color:var(--err)}
-pre{margin:0;background:var(--code);color:var(--codeink);font:12.5px/1.5 var(--mono);padding:10px;border-radius:4px;overflow:auto;max-height:320px;white-space:pre-wrap}
+pre{margin:0;background:var(--code);color:var(--codeink);font:12.5px/1.5 var(--mono);padding:8px;border-radius:4px;overflow:auto;max-height:320px;white-space:pre-wrap}
 #msg{font:13px var(--mono)} #msg.err{color:var(--err)} #msg.ok{color:var(--ok)}
 [hidden]{display:none!important}
 </style>
