@@ -67,7 +67,7 @@ pre{margin:0;background:var(--code);color:var(--codeink);font:12.5px/1.5 var(--m
 /* NMEA application profiles */
 .profiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,190px),1fr));gap:5px}
 .prof{text-align:left;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:4px 8px;cursor:pointer;display:flex;flex-direction:column;gap:0;min-width:0}
-.prof code{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prof code{white-space:normal;overflow-wrap:anywhere} /* wraps onto the free lines of the card instead of being cut */
 .prof b{font-size:14px}
 .prof span{font-size:13px;color:var(--muted)}
 .prof code{font:12px var(--mono);color:var(--ink)}
