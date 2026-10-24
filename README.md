@@ -66,6 +66,10 @@ Settings live in a separate flash area and survive firmware updates.
    - the Bluetooth mode.
 4. On your network, the page is at the Pico's IP address. **Backup → Download settings** saves a file you can upload to the next unit.
 
+## Help on the web page
+
+Every field, button, table column and status line has a short explanation. It appears when you hover with the mouse, when a field gets focus, or when you tap it on a phone. Status labels with help are underlined with dots.
+
 ## Finding the Pico / troubleshooting
 
 - **LED:** fast blink means the setup access point is on; slow blink means the Pico has joined your Wi-Fi, so the setup network disappears (this is normal).
@@ -78,7 +82,7 @@ Settings live in a separate flash area and survive firmware updates.
 - **NMEA tab:**
   - A live view of exactly what is sent to Bluetooth and TCP, refreshed every second; it can be paused.
   - The sentence types seen from the receiver, each with a counter.
-  - Tick the types to send, e.g. GGA, RMC and GST, then press **Save and restart**. With none ticked, everything is sent.
+  - Press the type buttons to choose what is sent (or **GGA + RMC + GST** for the usual RTK set), then **Save and restart**. With none selected, everything is sent. Hovering over (or tapping) a type shows what it carries.
   - The filter applies to Bluetooth and TCP only. USB always carries the full receiver stream.
   - To cut the load at the source, also turn unwanted messages off in the receiver.
 - **System → Shut down** (asks for confirmation; so do Restart, Save and restart, and Upload settings):

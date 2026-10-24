@@ -63,6 +63,20 @@ textarea{min-height:80px}
 pre{margin:0;background:var(--code);color:var(--codeink);font:12.5px/1.5 var(--mono);padding:8px;border-radius:4px;overflow:auto;max-height:320px;white-space:pre-wrap}
 #msg{font:13px var(--mono)} #msg.err{color:var(--err)} #msg.ok{color:var(--ok)}
 [hidden]{display:none!important}
+/* NMEA type toggles */
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font:600 13px var(--mono);border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:16px;padding:5px 11px;cursor:pointer;display:inline-flex;gap:6px;align-items:baseline}
+.chip small{font:400 11px var(--mono);color:var(--muted)}
+.chip[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--on)}
+.chip[aria-pressed=true] small{color:var(--on);opacity:.8}
+.chip.unseen{border-style:dashed}
+/* Help tips: hover with a mouse, focus a field, or tap on a touch screen */
+[data-help]{cursor:help}
+input[data-help],select[data-help],textarea[data-help],button[data-help],.chip{cursor:auto}
+button[data-help],.chip,label.check[data-help]{cursor:pointer}
+dt[data-help],th[data-help]{text-decoration:underline dotted var(--muted);text-underline-offset:3px}
+#tip{position:fixed;z-index:20;max-width:min(380px,calc(100vw - 16px));background:var(--ink);color:var(--bg);font:13px/1.45 var(--sans);padding:7px 10px;border-radius:5px;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.25);text-transform:none;letter-spacing:0}
+#tip b{font-family:var(--mono)}
 </style>
 </head>
 <body>
@@ -154,9 +168,13 @@ Dublin, Ireland · Athens, Greece<br>
 <div data-page="nmea" hidden>
 <section>
 <h2>Messages sent to Bluetooth and TCP</h2>
-<p class="hint">Tick the sentence types to send. With none ticked, everything the receiver outputs is sent. USB always carries the full receiver stream. To save bandwidth at the source, also turn unneeded messages off in the receiver (QGNSS or the Receiver tab).</p>
-<div class="row" id="nmeaTypes" style="gap:6px 18px"></div>
-<div class="grid" style="margin-top:10px"><label class="wide">Types (comma-separated, empty = all)<input id="nmeaFilter" placeholder="GGA,RMC,GST"></label></div>
+<p class="hint">Press a type to send it; press again to stop. With none selected, everything the receiver outputs is sent. Hover over (or tap) a type to see what it carries; the number is how many arrived since start-up, and a dashed outline means the receiver has not sent it yet. USB always carries the full receiver stream. The choice takes effect after <b>Save and restart</b>.</p>
+<div class="chips" id="nmeaTypes"></div>
+<div class="row" style="margin-top:10px">
+<button class="btn" id="nmeaRec" type="button">GGA + RMC + GST</button>
+<button class="btn" id="nmeaAll" type="button">Clear (send all)</button>
+<span class="hint" id="nmeaSel"></span>
+</div>
 </section>
 <section>
 <div class="row" style="justify-content:space-between"><h2>Live output</h2><span class="row"><span class="hint" id="nmeaRate"></span><button class="btn" id="nmeaPause" type="button">Pause</button></span></div>
@@ -182,8 +200,8 @@ Dublin, Ireland · Athens, Greece<br>
 <h2>Settings file and power</h2>
 <p class="hint">Download the full settings (with passwords) to copy one tested setup to every unit. Uploading replaces the settings and restarts the device.</p>
 <div class="row">
-<a class="btn" href="/api/config?secrets=1">Download settings</a>
-<label class="btn" style="text-transform:none;font-size:14px;letter-spacing:0;color:var(--ink)">Upload settings<input type="file" id="upload" accept=".json" hidden></label>
+<a class="btn" id="download" href="/api/config?secrets=1">Download settings</a>
+<label class="btn" id="uploadLbl" style="text-transform:none;font-size:14px;letter-spacing:0;color:var(--ink)">Upload settings<input type="file" id="upload" accept=".json" hidden></label>
 <button class="btn" id="reboot" type="button">Restart</button>
 <button class="btn" id="shutdown" type="button">Shut down</button>
 </div>
@@ -191,9 +209,10 @@ Dublin, Ireland · Athens, Greece<br>
 </div>
 <div class="row" id="saveBar" hidden><button class="btn primary" id="save" type="button">Save and restart</button><span id="msg"></span></div>
 </main>
+<div id="tip" role="tooltip" hidden></div>
 <script>
 const $=id=>document.getElementById(id);
-let cfg=null, nmeaVisible=false, nmeaPaused=false;
+let cfg=null, nmeaVisible=false, nmeaPaused=false, nmeaSel=new Set(), nmeaCounts={};
 const TYPES={base:"Own base",vrs:"VRS",near:"Nearest station",other:"Other"};
 // Tabs
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
@@ -203,7 +222,7 @@ $("saveBar").hidden=!["corr","net","rx","nmea"].includes(b.dataset.tab);
 nmeaVisible=b.dataset.tab==="nmea"; if(nmeaVisible) nmeaPoll();
 });
 function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
-function kv(el,rows){el.innerHTML=rows.map(([k,v])=>`<dt>${esc(k)}</dt><dd title="${esc(String(v).replace(/<[^>]*>/g,""))}">${v}</dd>`).join("")}
+function kv(el,rows){el.innerHTML=rows.map(([k,v])=>`<dt${KVHELP[k]?` data-help="${esc(KVHELP[k])}"`:""}>${esc(k)}</dt><dd title="${esc(String(v).replace(/<[^>]*>/g,""))}">${v}</dd>`).join("")}
 function msg(t,c){const m=$("msg");m.textContent=t;m.className=c||""}
 async function status(){
 try{
@@ -256,7 +275,7 @@ let w="";for(let i=0;i<4;i++){const n=cfg.wifi[i]||{};w+=`<tr><td class="n">${i+
 $("wifi").innerHTML=w;
 $("deviceName").value=cfg.deviceName;$("bt").value=o.bt;$("tcpPort").value=o.tcpPort;$("usb").checked=o.usb;$("inboundRtcm").checked=o.inboundRtcm;
 $("adminPass").value=cfg.web.adminPass;$("apPass").value=cfg.web.apPass;
-$("nmeaFilter").value=(o.nmeaTypes||[]).join(",");
+nmeaSel=new Set((o.nmeaTypes||[]).map(t=>t.toUpperCase()));renderChips();
 $("uartBaud").value=String(r.uartBaud);$("bootCmds").value=(r.bootCmds||[]).join("\n");
 }
 function collect(){
@@ -270,7 +289,7 @@ failover:{enabled:$("failover").checked,failbackSec:+$("failbackSec").value,retr
 dataTimeoutSec:+$("dataTimeoutSec").value,maxAgeSec:+$("maxAgeSec").value,ggaSec:+$("ggaSec").value},
 benchPosition:{lat:+$("benchLat").value||0,lon:+$("benchLon").value||0,alt:+$("benchAlt").value||0},
 outputs:{bt:$("bt").value,usb:$("usb").checked,tcpPort:+$("tcpPort").value,inboundRtcm:$("inboundRtcm").checked,
-nmeaTypes:$("nmeaFilter").value.split(/[ ,;]+/).map(t=>t.trim().toUpperCase()).filter(Boolean)},
+nmeaTypes:[...nmeaSel]},
 receiver:{uartBaud:+$("uartBaud").value,bootCmds:$("bootCmds").value.split("\n").map(s=>s.trim()).filter(Boolean)}};
 }
 function check(c){
@@ -294,16 +313,46 @@ $("shutdown").onclick=async()=>{
 if(!confirm("Shut down the Pico?\n\nIt closes the correction stream and the Bluetooth/TCP links, switches the radio off and halts. Unplug once the LEDs are off. To start it again, power it up."))return;
 const r=await fetch("/api/shutdown",{method:"POST"});$("saveBar").hidden=false;msg(await r.text(),r.ok?"ok":"err");
 };
-// NMEA monitor and type filter
-function filterSet(){return new Set($("nmeaFilter").value.split(/[ ,;]+/).map(t=>t.trim().toUpperCase()).filter(Boolean))}
+// NMEA monitor and type toggles
+const NMEA_INFO={
+GGA:"Fix data: UTC time, position, fix quality (4 = RTK fixed, 5 = RTK float), satellites used, HDOP, altitude, correction age and base station id. Needed by almost every GNSS app and by VRS/nearest-station casters.",
+RMC:"Recommended minimum: UTC time and date, position, speed and course over ground. Most navigation and mapping apps need it for the date.",
+GST:"Accuracy estimate: standard deviation of latitude, longitude and altitude in metres. Survey and field apps (e.g. SW Maps, QField) show accuracy from it.",
+GSA:"DOP values (PDOP, HDOP, VDOP) and the satellites used in the fix, one sentence per constellation.",
+GSV:"Satellites in view: elevation, azimuth and signal strength per satellite and band. The largest message by far; leave it off unless an app shows a sky plot.",
+VTG:"Course and speed over ground (true/magnetic course, knots and km/h).",
+GLL:"Latitude, longitude and UTC time only. Older format; GGA and RMC carry the same and more.",
+ZDA:"UTC date and time with local time-zone fields. Used for time synchronisation.",
+GNS:"Multi-constellation fix data with a mode letter per constellation; an alternative to GGA.",
+GRS:"Range residuals per satellite, for integrity monitoring.",
+PQTMEPE:"Quectel proprietary: estimated position error north, east, down, 2D and 3D in metres.",
+PQTMPVT:"Quectel proprietary: position, velocity and time in one sentence.",
+PQTMDOP:"Quectel proprietary: all dilution-of-precision values.",
+PQTMVERNO:"Quectel proprietary: firmware version (reply to the $PQTMVERNO command).",
+PQTMTXT:"Quectel proprietary: text message from the receiver."};
+const NMEA_COMMON=["GGA","RMC","GST","GSA","GSV","VTG","GLL","ZDA"];
+function nmeaHelp(id){return `<b>${esc(id)}</b> · ${esc(NMEA_INFO[id]||"Not in the built-in list; see the LG290P protocol manual.")}`}
+function renderChips(){
+const ids=[...new Set([...NMEA_COMMON,...Object.keys(nmeaCounts),...nmeaSel])];
+$("nmeaTypes").innerHTML=ids.map(id=>{const c=nmeaCounts[id];
+return `<button type="button" class="chip${c==null?" unseen":""}" data-t="${esc(id)}" aria-pressed="${nmeaSel.has(id)}">${esc(id)}<small>${c==null?"–":c}</small></button>`}).join("");
+$("nmeaTypes").querySelectorAll(".chip").forEach(b=>{b.dataset.help=nmeaHelp(b.dataset.t);
+b.onclick=()=>{const t=b.dataset.t;nmeaSel.has(t)?nmeaSel.delete(t):nmeaSel.add(t);b.setAttribute("aria-pressed",nmeaSel.has(t));nmeaSelText()}});
+nmeaSelText();
+}
+function nmeaSelText(){$("nmeaSel").textContent=nmeaSel.size?"Selected: "+[...nmeaSel].join(", "):"None selected: every type is sent."}
+$("nmeaRec").onclick=()=>{nmeaSel=new Set(["GGA","RMC","GST"]);renderChips()};
+$("nmeaAll").onclick=()=>{nmeaSel.clear();renderChips()};
 async function nmeaPoll(){
 if(!nmeaVisible) return;
 try{
-const d=await (await fetch("/api/nmea")).json(), f=filterSet();
-$("nmeaTypes").innerHTML=d.types.length?d.types.map(t=>`<label class="check"><input type="checkbox" data-t="${esc(t.id)}"${f.has(t.id)?" checked":""}> ${esc(t.id)} <span class="hint">(${t.count}${t.sent?"":", not sent"})</span></label>`).join(""):'<span class="hint">No sentences from the receiver yet.</span>';
-$("nmeaTypes").querySelectorAll("input").forEach(cb=>cb.onchange=()=>{const s=filterSet();cb.checked?s.add(cb.dataset.t):s.delete(cb.dataset.t);$("nmeaFilter").value=[...s].join(",")});
+const d=await (await fetch("/api/nmea")).json();
+const before=Object.keys(nmeaCounts).join();
+d.types.forEach(t=>nmeaCounts[t.id]=t.count);
+if(Object.keys(nmeaCounts).join()!==before) renderChips();
+else $("nmeaTypes").querySelectorAll(".chip").forEach(b=>{const c=nmeaCounts[b.dataset.t];if(c!=null)b.querySelector("small").textContent=c});
 if(!nmeaPaused){const pre=$("nmeaText");pre.textContent=d.text||"Nothing sent yet (no receiver data, or everything filtered out).";pre.scrollTop=pre.scrollHeight}
-$("nmeaRate").textContent=d.filter?("Filter: "+d.filter):"Filter: all types";
+$("nmeaRate").textContent="Active now: "+(d.filter||"all types");
 }catch(e){}
 setTimeout(nmeaPoll,1000);
 }
@@ -312,7 +361,94 @@ $("reboot").onclick=async()=>{if(!confirm("Restart the Pico now?\n\nThe correcti
 $("sendCmd").onclick=async()=>{const r=await fetch("/api/cmd",{method:"POST",body:$("cmd").value});$("saveBar").hidden=false;msg(await r.text(),r.ok?"ok":"err")};
 $("scan").onclick=async()=>{$("scanOut").textContent="scanning…";try{const l=await (await fetch("/api/scan")).json();
 $("scanOut").textContent=l.map(n=>`${n.ssid} (${n.rssi} dBm)`).join(", ")||"none found"}catch{$("scanOut").textContent="scan failed"}};
-loadConfig().then(status);setInterval(status,2000);
+// Help texts: shown when hovering with a mouse, when a field gets focus, or on tap (touch screens)
+const HELP={
+failover:"On: when the active source fails, move to the next one in the table. Off: stay on source 1 and keep retrying it.",
+failbackSec:"While running on a lower-priority source, return to source 1 after this many seconds to see if it is back. 0 = never return automatically. Default 600.",
+dataTimeoutSec:"The source counts as failed when no valid RTCM frame arrives for this long, even if the connection stays open. Default 30.",
+maxAgeSec:"While the receiver reports RTK, a correction age (from GGA) above this for 10 s counts as a failure of the source. 0 = off. Default 10.",
+ggaSec:"How often the position (GGA) is sent to sources that have GGA ticked. VRS and nearest-station mount points need it. Default 10.",
+backoffSec:"Waits used after every source has failed in a row, one step per round, in seconds, separated by commas. The last step repeats. Default 15,30,60,120,300.",
+benchLat:"Approximate latitude in decimal degrees (north positive), e.g. 53.3498. Sent as GGA to VRS/nearest casters until the receiver has its own fix. 0 = off.",
+benchLon:"Approximate longitude in decimal degrees (east positive, west negative), e.g. -6.2603. 0 = off.",
+benchAlt:"Approximate altitude above mean sea level in metres. A rough value is enough.",
+sname:"Your own label for this source; shown on the Home page and in the event log.",
+stype:"Kind of source, for your reference: own base, VRS (a virtual station computed at your position), nearest network station, or other. It does not change behaviour; the GGA column does.",
+shost:"Caster address without http://, e.g. gr.nrtk.eu or euref-ip.net. Leave empty to skip this row.",
+sport:"Caster TCP port: usually 2101; Metrica uses 7801.",
+smount:"Mount point (stream name) without the leading slash, e.g. MSM_NEAR. A wrong name returns the source table and the source is disabled.",
+suser:"Caster user name. Leave empty for open casters.",
+spass:"Caster password.",
+sgga:"Send the position (GGA) to this caster. Required for VRS and nearest-station mount points; without it they answer 200 OK but send no data.",
+sv2:"Use the NTRIP 2.0 (HTTP/1.1) request. Leave off for NTRIP 1.0 casters; most casters accept both.",
+stls:"Connect over TLS (encrypted, e.g. port 443). The server certificate is not checked.",
+wssid:"Wi-Fi network name. Networks are tried in order; the first one in range is used.",
+wpass:"Wi-Fi password. Leave empty for an open network.",
+scan:"List the Wi-Fi networks the Pico can hear, with signal strength (above -70 dBm is good).",
+deviceName:"Name used for the Bluetooth device (with 4 hex digits added), the setup access point and http://<name>.local. Letters, digits and dashes.",
+bt:"How NMEA reaches phones and tablets. Classic SPP: Android and Windows. BLE UART: iPhone/iPad. Both: experimental. Off: Bluetooth radio not used.",
+tcpPort:"NMEA is also served to TCP clients on this port (up to 3 clients), e.g. for a PC or a Wi-Fi app. 0 = off. Default 2947.",
+usb:"Pass the receiver's full output to the Pico's USB port, and what you type there to the receiver, so QGNSS can work through the Pico.",
+inboundRtcm:"When the Pico itself is not streaming NTRIP, pass RTCM sent by a Bluetooth/TCP app (one with its own NTRIP client) to the receiver.",
+adminPass:"Password for this web page. User name is always admin.",
+apPass:"Password of the setup access point (PicoRTK-Setup-XXXX). At least 8 characters.",
+nmeaPause:"Freeze the live view to read it; the output itself keeps running.",
+uartBaud:"Speed of the Pico-receiver serial link. It must match the receiver's UART setting (460800 recommended).",
+bootCmds:"Receiver commands sent once after every start-up, one per line, e.g. $PQTMCFGMSGRATE,W,GSV,0 to turn GSV off. The checksum is added when missing.",
+cmd:"A Quectel command to send now, e.g. $PQTMVERNO for the firmware version. The reply appears on USB and in the NMEA live view.",
+sendCmd:"Send the command to the receiver now. Nothing is saved.",
+download:"Save all settings, including passwords, as a JSON file.",
+uploadLbl:"Load a settings file saved from this or another PicoRTK. It replaces everything and restarts the Pico.",
+reboot:"Restart the Pico. Corrections and Bluetooth/TCP links drop for about 20 s.",
+shutdown:"Stop everything safely and halt, so the Pico can be unplugged.",
+save:"Store the settings on all tabs in flash and restart the Pico to apply them.",
+nmeaRec:"Select the usual set for RTK apps: position and fix quality (GGA), date and speed (RMC), accuracy (GST).",
+nmeaAll:"Clear the selection: every type the receiver outputs is sent."};
+const KVHELP={
+"Fix":"Fix quality from GGA. RTK fixed = centimetre level; RTK float = decimetre level, still converging; GNSS = metre level.",
+"HDOP":"Horizontal dilution of precision: satellite geometry. Below 1 is good; above 2 is poor.",
+"Correction age":"Seconds since the last correction used by the receiver. Normally 1-2 s; above the 'Max correction age' setting counts as a failure.",
+"Base station":"Reference station id reported by the receiver in GGA.",
+"UTC":"Time of the last GGA from the receiver.",
+"State":"NTRIP client state: connecting, waiting for a fix, streaming, backing off, or stopped.",
+"On stream":"Seconds on the current connection.",
+"Last frame":"Time since the last valid RTCM frame from the caster.",
+"Bytes on stream":"Bytes received on the current connection. Stuck at 0 with a 200 OK reply usually means the mount point needs a position (GGA).",
+"Frames / CRC errors":"Valid RTCM frames since start-up, and frames rejected by the CRC check.",
+"GGA sent":"Positions sent to casters since start-up, and the last one sent.",
+"Base id (1005)":"Reference station id from RTCM message 1005/1006 in the correction stream.",
+"Failovers":"Number of source changes since start-up.",
+"Last event":"Latest correction event; the full list is under Correction events.",
+"Bluetooth":"Bluetooth name and mode, and whether an app is connected.",
+"TCP clients":"Clients connected to the NMEA TCP port.",
+"Wi-Fi signal":"Signal strength of the joined network. Above -70 dBm is good; below -80 dBm is unreliable.",
+"Receiver UART":"Speed and byte counters of the Pico-receiver serial link. rx not growing = no data from the receiver (check wiring and speed).",
+"NMEA good / bad":"Sentences from the receiver with a correct / wrong checksum. Bad ones point to a speed mismatch or noisy wiring.",
+"Dropped (queues full)":"Data dropped because a queue between the cores was full. Should stay 0."};
+const THHELP={Name:"sname",Type:"stype","Caster host":"shost",Port:"sport","Mount point":"smount",User:"suser",Password:"spass",GGA:"sgga","NTRIP 2":"sv2",TLS:"stls","Network name (SSID)":"wssid"};
+function applyHelp(root){
+(root||document).querySelectorAll("[id]").forEach(el=>{
+const h=HELP[el.id]||HELP[el.id.replace(/^([sw])\d/,"$1")]; if(!h) return;
+const lab=el.closest("label"); (lab&&!lab.closest(".tbl")?lab:el).dataset.help=h;
+});
+document.querySelectorAll(".tbl th").forEach(th=>{const k=THHELP[th.textContent];if(k)th.dataset.help=HELP[k]});
+}
+const tip=$("tip");let tipFor=null,tipTimer=0;
+function showTip(el){
+if(!el||!el.dataset.help){hideTip();return}
+tipFor=el;tip.innerHTML=el.dataset.help.startsWith("<b>")?el.dataset.help:esc(el.dataset.help);tip.hidden=false;
+const r=el.getBoundingClientRect(),t=tip.getBoundingClientRect(),vw=innerWidth,vh=innerHeight;
+let y=r.bottom+6; if(y+t.height>vh-4) y=Math.max(4,r.top-t.height-6);
+tip.style.top=y+"px";tip.style.left=Math.min(Math.max(8,r.left),vw-t.width-8)+"px";
+}
+function hideTip(){tip.hidden=true;tipFor=null;clearTimeout(tipTimer)}
+document.addEventListener("pointerover",e=>{if(e.pointerType!=="mouse")return;const el=e.target.closest("[data-help]");if(el!==tipFor){clearTimeout(tipTimer);if(el)tipTimer=setTimeout(()=>showTip(el),350);else hideTip()}});
+document.addEventListener("pointerdown",e=>{if(e.pointerType==="mouse"){hideTip();return}const el=e.target.closest("[data-help]");if(el){showTip(el);clearTimeout(tipTimer);tipTimer=setTimeout(hideTip,6000)}else hideTip()});
+document.addEventListener("focusin",e=>{const el=e.target.closest("[data-help]");if(el&&e.target.matches("input,select,textarea"))showTip(el)});
+document.addEventListener("focusout",e=>{if(tipFor&&tipFor.contains(e.target))hideTip()});
+addEventListener("scroll",hideTip,true);
+applyHelp();
+loadConfig().then(()=>{applyHelp();status()});setInterval(status,2000);
 </script>
 </body>
 </html>)rawliteral";
