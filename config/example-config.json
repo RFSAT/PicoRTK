@@ -88,5 +88,10 @@
   "receiver": {
     "uartBaud": 460800,
     "bootCmds": []
+  },
+  "benchPosition": {
+    "lat": 0,
+    "lon": 0,
+    "alt": 0
   }
 }

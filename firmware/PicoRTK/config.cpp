@@ -79,6 +79,10 @@ String configToJson(bool withSecrets)
     f["dataTimeoutSec"] = cfg.dataTimeoutSec;
     f["maxAgeSec"] = cfg.maxAgeSec;
     f["ggaSec"] = cfg.ggaSec;
+    JsonObject bp = d["benchPosition"].to<JsonObject>();
+    bp["lat"] = cfg.benchLat;
+    bp["lon"] = cfg.benchLon;
+    bp["alt"] = cfg.benchAlt;
 
     JsonObject out = d["outputs"].to<JsonObject>();
     out["bt"] = cfg.bt;
@@ -186,6 +190,19 @@ bool configFromJson(const String &json, String &err)
         getNum(f["dataTimeoutSec"], c.dataTimeoutSec);
         getNum(f["maxAgeSec"], c.maxAgeSec);
         getNum(f["ggaSec"], c.ggaSec);
+    }
+
+    JsonVariantConst bp = d["benchPosition"];
+    if (!bp.isNull())
+    {
+        getNum(bp["lat"], c.benchLat);
+        getNum(bp["lon"], c.benchLon);
+        getNum(bp["alt"], c.benchAlt);
+    }
+    if (c.benchLat < -90 || c.benchLat > 90 || c.benchLon < -180 || c.benchLon > 180)
+    {
+        err = "benchPosition out of range";
+        return false;
     }
 
     JsonVariantConst o = d["outputs"];

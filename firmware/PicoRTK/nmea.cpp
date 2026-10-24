@@ -1,5 +1,6 @@
 // nmea.cpp - see nmea.h
 #include "nmea.h"
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
@@ -94,6 +95,21 @@ bool NmeaAssembler::feed(uint8_t c)
     }
     _buf[_len++] = (char)c;
     return false;
+}
+
+size_t nmeaMakeGga(double lat, double lon, float alt, uint32_t secOfDay, char *out, size_t outSize)
+{
+    char ns = lat < 0 ? 'S' : 'N', ew = lon < 0 ? 'W' : 'E';
+    lat = lat < 0 ? -lat : lat;
+    lon = lon < 0 ? -lon : lon;
+    int latD = (int)lat, lonD = (int)lon;
+    double latM = (lat - latD) * 60.0, lonM = (lon - lonD) * 60.0;
+    secOfDay %= 86400;
+    char body[120];
+    snprintf(body, sizeof(body), "$GPGGA,%02u%02u%02u.00,%02d%010.7f,%c,%03d%010.7f,%c,1,12,1.0,%.3f,M,0.000,M,,",
+             (unsigned)(secOfDay / 3600), (unsigned)(secOfDay / 60 % 60), (unsigned)(secOfDay % 60), latD, latM, ns,
+             lonD, lonM, ew, (double)alt);
+    return nmeaFinish(body, out, outSize);
 }
 
 bool nmeaIsGga(const char *s, size_t len)

@@ -89,6 +89,8 @@ Settings live in a separate flash area and survive firmware updates.
 - The Pico waits up to 60 s for a fix before connecting.
 - It then sends the receiver's GGA every `ggaSec`.
 
+**Bench position (Corrections tab):** VRS and nearest-station mount points (Metrica MSM_VRS, MSM_NEAR) choose what to send from the rover's GGA. Until they get one, they answer "200 OK" but send nothing. Without a receiver, or before its first fix, enter an approximate latitude, longitude and altitude. The Pico then sends that as GGA, using NTP time, and the stream starts. Once the receiver has a fix, its own GGA is used instead. Set it back to 0 to turn it off.
+
 **RTCM checks and inbound corrections:**
 
 - Every RTCM frame is CRC-checked before it reaches the receiver.

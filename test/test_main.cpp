@@ -67,6 +67,17 @@ static void testNmea()
     CHECK(nmeaParseGga(noFix.c_str(), noFix.size(), g));
     CHECK(g.quality == 0 && g.age < 0 && g.station == -1);
 
+    // Bench GGA: Athens, valid checksum, parses back
+    char bench[128];
+    size_t bl = nmeaMakeGga(37.968723, 23.729420, 120.5f, 10 * 3600 + 15 * 60 + 30, bench, sizeof(bench));
+    CHECK(bl > 40 && nmeaChecksumOk(bench, bl));
+    GgaInfo b;
+    CHECK(nmeaParseGga(bench, bl, b) && b.quality == 1);
+    CHECK(b.lat > 37.96872 && b.lat < 37.96873 && b.lon > 23.72941 && b.lon < 23.72943);
+    CHECK(strncmp(b.utc, "101530", 6) == 0);
+    bl = nmeaMakeGga(-33.5, -70.25, 0, 0, bench, sizeof(bench));
+    CHECK(nmeaParseGga(bench, bl, b) && b.lat < -33.49 && b.lon < -70.24);
+
     // nmeaFinish keeps an existing checksum
     char out[64];
     nmeaFinish("$PQTMVERNO*58", out, sizeof(out));

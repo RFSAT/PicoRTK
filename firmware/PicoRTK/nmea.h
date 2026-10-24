@@ -47,6 +47,10 @@ struct GgaInfo
     char utc[11] = {0};      // hhmmss.ss
 };
 
+// Build a GGA for a fixed position (quality 1), e.g. a bench position sent to VRS/nearest casters
+// when the receiver has no fix. secOfDay = UTC seconds since midnight. Returns the length.
+size_t nmeaMakeGga(double lat, double lon, float alt, uint32_t secOfDay, char *out, size_t outSize);
+
 // True when the sentence is a GGA from any talker ($GPGGA, $GNGGA, ...)
 bool nmeaIsGga(const char *s, size_t len);
 // Parse a GGA sentence (checksum already verified)

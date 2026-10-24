@@ -65,6 +65,12 @@ static bool tryStation(uint32_t timeoutMs)
     {
         dbg("[net] connected to %s, %s\r\n", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
         startMdns();
+        static bool ntp = false;
+        if (!ntp)
+        {
+            NTP.begin("pool.ntp.org", "time.google.com"); // UTC time for the bench GGA
+            ntp = true;
+        }
     }
     return ok;
 }

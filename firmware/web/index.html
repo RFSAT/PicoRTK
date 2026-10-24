@@ -74,7 +74,11 @@ pre{margin:0;background:var(--code);color:var(--codeink);font:12.5px/1.5 var(--m
       <label>Max correction age (s, 0 = off)<input type="number" id="maxAgeSec" min="0"></label>
       <label>GGA interval (s)<input type="number" id="ggaSec" min="1"></label>
       <label>Back-off steps (s)<input id="backoffSec" placeholder="15,30,60,120,300"></label>
+      <label>Bench latitude (deg, 0 = off)<input type="number" step="any" id="benchLat"></label>
+      <label>Bench longitude (deg)<input type="number" step="any" id="benchLon"></label>
+      <label>Bench altitude (m)<input type="number" step="any" id="benchAlt"></label>
     </div>
+    <p class="hint">Bench position: sent to VRS and nearest-station casters while the receiver has no fix, so they start streaming (they choose a station from it). Leave 0 in the field.</p>
   </section>
   <div id="sources" style="display:flex;flex-direction:column;gap:14px"></div>
 </div>
@@ -199,7 +203,7 @@ async function loadConfig(){
   cfg=await (await fetch("/api/config")).json();
   const f=cfg.failover,o=cfg.outputs,r=cfg.receiver;
   $("failover").checked=f.enabled;$("failbackSec").value=f.failbackSec;$("dataTimeoutSec").value=f.dataTimeoutSec;
-  $("maxAgeSec").value=f.maxAgeSec;$("ggaSec").value=f.ggaSec;$("backoffSec").value=f.backoffSec.join(",");
+  $("maxAgeSec").value=f.maxAgeSec;const bp=cfg.benchPosition||{};$("benchLat").value=bp.lat||0;$("benchLon").value=bp.lon||0;$("benchAlt").value=bp.alt||0;$("ggaSec").value=f.ggaSec;$("backoffSec").value=f.backoffSec.join(",");
   $("sources").innerHTML=cfg.ntrip.map(sourceCard).join("");
   let w="";for(let i=0;i<4;i++){const n=cfg.wifi[i]||{};w+=`<label>Network ${i+1}<input id="w${i}ssid" value="${esc(n.ssid)}" placeholder="SSID"></label><label>Password<input type="password" id="w${i}pass" value="${esc(n.pass)}" autocomplete="new-password"></label>`}
   $("wifi").innerHTML=w;
@@ -217,6 +221,7 @@ function collect(){
   return {deviceName:$("deviceName").value.trim(),web:{adminPass:$("adminPass").value,apPass:$("apPass").value},wifi,ntrip,
     failover:{enabled:$("failover").checked,failbackSec:+$("failbackSec").value,retryMs:cfg.failover.retryMs,backoffSec:backoff.length?backoff:[15,30,60,120,300],
       dataTimeoutSec:+$("dataTimeoutSec").value,maxAgeSec:+$("maxAgeSec").value,ggaSec:+$("ggaSec").value},
+    benchPosition:{lat:+$("benchLat").value||0,lon:+$("benchLon").value||0,alt:+$("benchAlt").value||0},
     outputs:{bt:$("bt").value,usb:$("usb").checked,tcpPort:+$("tcpPort").value,inboundRtcm:$("inboundRtcm").checked},
     receiver:{uartBaud:+$("uartBaud").value,bootCmds:$("bootCmds").value.split("\n").map(s=>s.trim()).filter(Boolean)}};
 }

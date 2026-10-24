@@ -41,6 +41,9 @@ struct Config
     uint32_t dataTimeoutSec = 30; // no valid RTCM frame for this long = source failure
     uint32_t maxAgeSec = 10;      // GGA correction age above this while streaming = failure
     uint32_t ggaSec = 10;         // GGA upload interval
+    // Bench position: sent as GGA to VRS/nearest casters while the receiver has no fix (0,0 = off)
+    double benchLat = 0, benchLon = 0;
+    float benchAlt = 0;
 
     // Outputs
     String bt = "spp";   // spp | ble | both | off

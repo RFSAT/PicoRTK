@@ -6,6 +6,7 @@
 #include "util.h"
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <time.h>
 
 #ifndef PICORTK_VERSION
 #define PICORTK_VERSION "0.1.0"
@@ -162,14 +163,31 @@ static bool startConnect()
     return true;
 }
 
+// Position to send to the caster: the receiver's GGA when it has a fix, otherwise the bench position
+static size_t ggaForCaster(uint32_t now, char *out, size_t outSize)
+{
+    SharedGga g;
+    if (getLatestGga(g) && g.info.quality > 0 && (now - g.atMs) < 5000 && g.len < outSize)
+    {
+        memcpy(out, g.sentence, g.len);
+        return g.len;
+    }
+    if (cfg.benchLat == 0 && cfg.benchLon == 0)
+        return 0;
+    time_t t = time(nullptr);
+    uint32_t sod = (t > 1600000000) ? (uint32_t)(t % 86400) : 43200; // NTP time, else noon
+    return nmeaMakeGga(cfg.benchLat, cfg.benchLon, cfg.benchAlt, sod, out, outSize);
+}
+
 static void sendGga(uint32_t now)
 {
     if (!cur().gga || (now - lastGgaSent) < cfg.ggaSec * 1000UL)
         return;
-    SharedGga g;
-    if (!getLatestGga(g) || g.info.quality == 0 || (now - g.atMs) > 5000)
+    char gga[NMEA_MAX + 3];
+    size_t n = ggaForCaster(now, gga, sizeof(gga));
+    if (!n)
         return;
-    client->write((const uint8_t *)g.sentence, g.len);
+    client->write((const uint8_t *)gga, n);
     lastGgaSent = now;
 }
 
@@ -218,8 +236,8 @@ void ntripLoop(bool networkUp)
         break;
 
     case NtripState::WaitFix: {
-        SharedGga g;
-        bool havePos = getLatestGga(g) && g.info.quality > 0 && (now - g.atMs) < 5000;
+        char tmp[NMEA_MAX + 3];
+        bool havePos = ggaForCaster(now, tmp, sizeof(tmp)) > 0;
         if (havePos || now - stateAt > WAIT_FIX_MAX_MS)
         {
             if (!havePos)
