@@ -179,7 +179,7 @@ function msg(t,c){const m=$("msg");m.textContent=t;m.className=c||""}
 async function status(){
   try{
     const s=await (await fetch("/api/status")).json();
-    $("hdr").textContent=`v${s.version} · ${s.wifi.mode} ${s.wifi.ssid||""} ${s.wifi.ip} · up ${Math.floor(s.uptimeSec/60)} min`;
+    $("hdr").textContent=`v${s.version} · ${s.wifi.mode} ${s.wifi.ssid||""} ${s.wifi.ip} · up ${Math.floor(s.uptimeSec/60)} min · last reset: ${s.lastReset||"?"}`;
     const g=s.gnss;
     kv($("sGnss"),[
       ["Fix",`<span class="pill q${g.quality??0}">${esc(g.qualityName)}</span>`],

@@ -48,6 +48,8 @@ static void handleStatus()
     JsonDocument d;
     d["version"] = PICORTK_VERSION;
     d["uptimeSec"] = now / 1000;
+    extern const char *bootReason;
+    d["lastReset"] = bootReason;
     d["device"] = cfg.deviceName;
     d["bluetoothName"] = outputsBtName();
 

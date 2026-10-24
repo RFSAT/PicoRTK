@@ -41,23 +41,45 @@ void dbg(const char *fmt, ...)
     Serial.print(buf);
 }
 
+// Core 0 heartbeat: core 1 feeds the hardware watchdog only while core 0 is alive,
+// so a hang on either core restarts the board instead of leaving it dead.
+std::atomic<uint32_t> core0Beat{0};
+std::atomic<bool> wdtArmed{false};
+static const uint32_t WDT_MS = 8000;           // hardware watchdog period
+static const uint32_t CORE0_STALL_MS = 60000;  // longest blocking call on core 0 (Wi-Fi join, TCP connect)
+
 void safeReboot()
 {
+    // Safety net first: whatever happens below, the watchdog resets the chip within 3 s
+    wdtArmed = false;
+    watchdog_enable(3000, true);
     dbg("[boot] restarting\r\n");
-    Serial.flush();
-    outputsStop();
-    WiFi.disconnect();
-    WiFi.softAPdisconnect(true);
-    delay(200);
-    // Power the CYW43 radio off (WL_ON = GPIO23 on the Pico 2 W) so it is reset with the RP2350
+    // Power the CYW43 radio off straight away (WL_ON = GPIO23 on the Pico 2 W), no graceful
+    // Bluetooth/Wi-Fi shutdown that could itself block, so the radio starts cold after the reset
     gpio_init(23);
     gpio_set_dir(23, GPIO_OUT);
     gpio_put(23, 0);
-    delay(100);
+    busy_wait_ms(300);
     watchdog_reboot(0, 0, 10);
     while (true)
         tight_loop_contents();
 }
+
+static const char *resetReasonName()
+{
+    switch (rp2040.getResetReason())
+    {
+    case RP2040::PWRON_RESET: return "power-on";
+    case RP2040::RUN_PIN_RESET: return "RUN pin";
+    case RP2040::SOFT_RESET: return "software restart";
+    case RP2040::WDT_RESET: return "watchdog (recovered from a hang)";
+    case RP2040::DEBUG_RESET: return "debug";
+    case RP2040::GLITCH_RESET: return "power glitch";
+    case RP2040::BROWNOUT_RESET: return "brown-out";
+    default: return "unknown";
+    }
+}
+const char *bootReason = "unknown";
 
 void setup()
 {
@@ -65,7 +87,8 @@ void setup()
     // Give a serial terminal a moment to attach so the start-up log is not lost
     for (uint32_t t = millis(); !Serial && millis() - t < 1500;)
         delay(10);
-    dbg("\r\n[boot] PicoRTK %s\r\n", PICORTK_VERSION);
+    bootReason = resetReasonName();
+    dbg("\r\n[boot] PicoRTK %s, last reset: %s\r\n", PICORTK_VERSION, bootReason);
     receiverInitShared();
     if (!LittleFS.begin())
     {
@@ -75,6 +98,9 @@ void setup()
     configLoad();
     dbg("[boot] settings loaded, Bluetooth %s\r\n", cfg.bt.c_str());
     configReady = true; // core 1 may start the UART now
+    core0Beat = millis();
+    watchdog_enable(WDT_MS, true); // fed by core 1 (see loop1)
+    wdtArmed = true;
 
     statusSetup();
     outputsSetup();
@@ -114,6 +140,7 @@ static void sendBootCommands()
 
 void loop()
 {
+    core0Beat = millis();
     netLoop();
     bool up = netUp();
     outputsNetworkUp(up);
@@ -131,4 +158,9 @@ void loop()
 
 void setup1() { receiverSetup1(); }
 
-void loop1() { receiverLoop1(); }
+void loop1()
+{
+    receiverLoop1();
+    if (wdtArmed && millis() - core0Beat.load() < CORE0_STALL_MS)
+        watchdog_update();
+}
