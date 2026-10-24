@@ -29,6 +29,9 @@ struct NtripStatus
     int stationId;         // from 1005/1006
     int backoffLevel;
     char lastEvent[96];    // human-readable last event
+    uint32_t streamBytes;  // bytes received on the current stream
+    uint32_t ggaSent;      // GGA sentences sent to casters since boot
+    char lastGga[100];     // last GGA sent (without CR/LF)
 };
 
 void ntripSetup();                 // after configLoad()

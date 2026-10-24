@@ -27,7 +27,8 @@ static NtripResponse reply;
 static ChunkDecoder chunks;
 static RtcmFramer framer;
 static uint32_t stateAt = 0, waitMs = 0, streamStart = 0, lastFrameMs = 0, lastGgaSent = 0, ageBadSince = 0;
-static uint32_t bytesTotal = 0;
+static uint32_t bytesTotal = 0, streamBytes = 0, ggaSentCount = 0;
+static char lastGgaText[100] = "";
 static char lastEvent[96] = "starting";
 
 // Small event log for the web page
@@ -189,6 +190,15 @@ static void sendGga(uint32_t now)
         return;
     client->write((const uint8_t *)gga, n);
     lastGgaSent = now;
+    if (ggaSentCount++ == 0 || streamBytes == 0)
+        event("GGA sent: %.60s", gga); // log until the caster answers with data
+    size_t m = n;
+    while (m && (gga[m - 1] == '\r' || gga[m - 1] == '\n'))
+        m--;
+    if (m >= sizeof(lastGgaText))
+        m = sizeof(lastGgaText) - 1;
+    memcpy(lastGgaText, gga, m);
+    lastGgaText[m] = 0;
 }
 
 static void pushStream(const uint8_t *data, size_t n, uint32_t now)
@@ -276,7 +286,9 @@ void ntripLoop(bool networkUp)
             case NtripReply::Incomplete:
                 break;
             case NtripReply::Ok: {
-                event("source %d %s streaming (%s)", sel.active() + 1, cur().name.c_str(), reply.statusLine());
+                event("source %d %s streaming (%s%s)", sel.active() + 1, cur().name.c_str(), reply.statusLine(),
+                      reply.chunked() ? ", chunked" : "");
+                streamBytes = 0;
                 sel.connected(now);
                 streamStart = lastFrameMs = now;
                 ageBadSince = 0;
@@ -289,6 +301,7 @@ void ntripLoop(bool networkUp)
                     if (reply.chunked())
                         m = chunks.decode(buf + off, m, buf + off);
                     bytesTotal += m;
+                    streamBytes += m;
                     pushStream(buf + off, m, now);
                 }
                 break;
@@ -331,6 +344,9 @@ void ntripLoop(bool networkUp)
                     }
                 }
                 bytesTotal += m;
+                if (streamBytes == 0 && m)
+                    event("first data from caster: %u bytes, first byte 0x%02X", (unsigned)m, buf[0]);
+                streamBytes += m;
                 pushStream(buf, m, now);
             }
         }
@@ -398,4 +414,7 @@ void ntripStatus(NtripStatus &s)
     s.stationId = framer.stationId();
     s.backoffLevel = sel.backoffLevel();
     strncpy(s.lastEvent, lastEvent, sizeof(s.lastEvent));
+    s.streamBytes = streamBytes;
+    s.ggaSent = ggaSentCount;
+    strncpy(s.lastGga, lastGgaText, sizeof(s.lastGga));
 }

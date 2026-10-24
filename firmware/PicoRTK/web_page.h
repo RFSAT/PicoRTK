@@ -20,11 +20,11 @@ header small{color:var(--muted);font-family:var(--mono)}
 nav{display:flex;gap:4px;padding:8px 16px;overflow-x:auto}
 nav button{border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:6px 12px;border-radius:4px;font:inherit;cursor:pointer;white-space:nowrap}
 nav button[aria-selected=true]{background:var(--accent);border-color:var(--accent);color:var(--on)}
-main{max-width:980px;margin:0 auto;padding:8px 16px 40px;display:flex;flex-direction:column;gap:14px}
+main{max-width:none;margin:0;padding:8px 16px 40px;display:flex;flex-direction:column;gap:14px}
 section{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px}
 h2{margin:0 0 8px;font-size:16px}
 .hint{margin:0 0 10px;color:var(--muted);font-size:13px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px 12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px 12px}
 .wide{grid-column:1/-1}
 label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;min-width:0}
 label.check{flex-direction:row;align-items:center;gap:8px;text-transform:none;font-size:14px;color:var(--ink);letter-spacing:0}
@@ -36,12 +36,20 @@ textarea{min-height:90px}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on)}
 .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:14px}
-.kv dt{color:var(--muted)} .kv dd{margin:0;font-family:var(--mono);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
-.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+.kv dt{color:var(--muted);white-space:nowrap} .kv dd{margin:0;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}
+.tiles section{min-width:0}
+.tbl{overflow-x:auto}
+.tbl table{border-collapse:collapse;width:100%}
+.tbl th{font:600 11px var(--sans);color:var(--muted);text-transform:uppercase;letter-spacing:.03em;text-align:left;padding:4px 6px;white-space:nowrap}
+.tbl td{padding:4px 6px;vertical-align:middle}
+.tbl td.n{font:600 13px var(--mono);color:var(--muted);white-space:nowrap}
+.tbl input,.tbl select{min-width:70px}
+.tbl td.c{text-align:center}
+.tbl input[type=checkbox]{width:auto;min-width:0}
+.tbl tr.active td.n{color:var(--accent)}
 .pill{display:inline-block;font:600 12px var(--mono);padding:2px 8px;border-radius:10px;border:1px solid currentColor}
 .q4{color:var(--ok)} .q5{color:var(--warn)} .q0,.q1,.q2{color:var(--err)}
-.src{border-left:4px solid var(--line);padding-left:10px}
-.src.active{border-left-color:var(--accent)}
 pre{margin:0;background:var(--code);color:var(--codeink);font:12.5px/1.5 var(--mono);padding:10px;border-radius:4px;overflow:auto;max-height:320px;white-space:pre-wrap}
 #msg{font:13px var(--mono)} #msg.err{color:var(--err)} #msg.ok{color:var(--ok)}
 [hidden]{display:none!important}
@@ -82,13 +90,23 @@ pre{margin:0;background:var(--code);color:var(--codeink);font:12.5px/1.5 var(--m
 </div>
 <p class="hint">Bench position: sent to VRS and nearest-station casters while the receiver has no fix, so they start streaming (they choose a station from it). Leave 0 in the field.</p>
 </section>
-<div id="sources" style="display:flex;flex-direction:column;gap:14px"></div>
+<section>
+<h2>Correction sources</h2>
+<p class="hint">One row per source, in priority order. Leave the host empty to skip a source. The active source is highlighted.</p>
+<div class="tbl"><table>
+<thead><tr><th>#</th><th>Name</th><th>Type</th><th>Caster host</th><th>Port</th><th>Mount point</th><th>User</th><th>Password</th><th>GGA</th><th>NTRIP 2</th><th>TLS</th></tr></thead>
+<tbody id="sources"></tbody>
+</table></div>
+</section>
 </div>
 <div data-page="net" hidden>
 <section>
 <h2>Wi-Fi networks</h2>
 <p class="hint">Tried in order; the first in range is used. Without any, the device opens its setup access point.</p>
-<div class="grid" id="wifi"></div>
+<div class="tbl"><table>
+<thead><tr><th>#</th><th>Network name (SSID)</th><th>Password</th></tr></thead>
+<tbody id="wifi"></tbody>
+</table></div>
 <div class="row" style="margin-top:10px"><button class="btn" id="scan" type="button">Scan</button><span class="hint" id="scanOut"></span></div>
 </section>
 <section>
@@ -147,7 +165,7 @@ document.querySelectorAll("[data-page]").forEach(p=>p.hidden=p.dataset.page!==b.
 $("saveBar").hidden=!["corr","net","rx"].includes(b.dataset.tab);
 });
 function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
-function kv(el,rows){el.innerHTML=rows.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${v}</dd>`).join("")}
+function kv(el,rows){el.innerHTML=rows.map(([k,v])=>`<dt>${esc(k)}</dt><dd title="${esc(String(v).replace(/<[^>]*>/g,""))}">${v}</dd>`).join("")}
 function msg(t,c){const m=$("msg");m.textContent=t;m.className=c||""}
 async function status(){
 try{
@@ -163,7 +181,8 @@ const n=s.ntrip;
 kv($("sNtrip"),[
 ["State",esc(n.state)],["Source",`${n.source} · ${esc(n.sourceName)}`],["Caster",esc(n.host)+"/"+esc(n.mount)],
 ["On stream",n.streamSec+" s"],["Last frame",n.lastFrameAgoMs!=null?(n.lastFrameAgoMs/1000).toFixed(1)+" s ago":"–"],
-["Frames / CRC errors",n.frames+" / "+n.crcErrors],["Base id (1005)",n.stationId>=0?n.stationId:"–"],
+["Bytes on stream",n.streamBytes],["Frames / CRC errors",n.frames+" / "+n.crcErrors],
+["GGA sent",n.ggaSent+(n.lastGga?" · "+esc(n.lastGga):"")],["Base id (1005)",n.stationId>=0?n.stationId:"–"],
 ["Failovers",n.switches],["Last event",esc(n.lastEvent)]]);
 const o=s.outputs,u=s.uart;
 kv($("sLinks"),[
@@ -172,24 +191,22 @@ kv($("sLinks"),[
 ["Wi-Fi signal",s.wifi.rssi?s.wifi.rssi+" dBm":"–"],
 ["Receiver UART",`${u.baud} bit/s · rx ${u.rxBytes} B · tx ${u.txBytes} B`],
 ["NMEA good / bad",u.nmeaGood+" / "+u.nmeaBad],["Dropped (queues full)",u.drops]]);
-document.querySelectorAll(".src").forEach((el,i)=>el.classList.toggle("active",i===n.source-1));
+document.querySelectorAll("#sources tr").forEach((el,i)=>el.classList.toggle("active",i===n.source-1));
 $("log").textContent=await (await fetch("/api/log")).text()||"No events yet";
 }catch(e){$("hdr").textContent="device not reachable"}
 }
 function sourceCard(s,i){
-return `<section class="src"><h2>Source ${i+1}${i===0?" (priority)":""}</h2>
-<div class="grid">
-<label>Name<input id="s${i}name" value="${esc(s.name)}"></label>
-<label>Type<select id="s${i}type">${Object.entries(TYPES).map(([k,v])=>`<option value="${k}"${s.type===k?" selected":""}>${v}</option>`).join("")}</select></label>
-<label class="wide">Caster host<input id="s${i}host" value="${esc(s.host)}" placeholder="leave empty to skip"></label>
-<label>Port<input type="number" id="s${i}port" value="${s.port||2101}"></label>
-<label>Mount point<input id="s${i}mount" value="${esc(s.mount)}"></label>
-<label>User<input id="s${i}user" value="${esc(s.user)}" autocomplete="off"></label>
-<label>Password<input type="password" id="s${i}pass" value="${esc(s.pass)}" autocomplete="new-password"></label>
-<label class="check"><input type="checkbox" id="s${i}gga"${s.gga?" checked":""}> Send position (GGA)</label>
-<label class="check"><input type="checkbox" id="s${i}v2"${s.v2?" checked":""}> NTRIP 2.0</label>
-<label class="check"><input type="checkbox" id="s${i}tls"${s.tls?" checked":""}> TLS</label>
-</div></section>`;
+return `<tr><td class="n">${i+1}</td>
+<td><input id="s${i}name" value="${esc(s.name)}"></td>
+<td><select id="s${i}type">${Object.entries(TYPES).map(([k,v])=>`<option value="${k}"${s.type===k?" selected":""}>${v}</option>`).join("")}</select></td>
+<td><input id="s${i}host" value="${esc(s.host)}" placeholder="empty = skip" style="min-width:150px"></td>
+<td><input type="number" id="s${i}port" value="${s.port||2101}" style="width:80px"></td>
+<td><input id="s${i}mount" value="${esc(s.mount)}"></td>
+<td><input id="s${i}user" value="${esc(s.user)}" autocomplete="off"></td>
+<td><input type="password" id="s${i}pass" value="${esc(s.pass)}" autocomplete="new-password"></td>
+<td class="c"><input type="checkbox" id="s${i}gga"${s.gga?" checked":""} title="Send position (GGA)"></td>
+<td class="c"><input type="checkbox" id="s${i}v2"${s.v2?" checked":""} title="NTRIP 2.0"></td>
+<td class="c"><input type="checkbox" id="s${i}tls"${s.tls?" checked":""} title="TLS"></td></tr>`;
 }
 async function loadConfig(){
 cfg=await (await fetch("/api/config")).json();
@@ -197,7 +214,7 @@ const f=cfg.failover,o=cfg.outputs,r=cfg.receiver;
 $("failover").checked=f.enabled;$("failbackSec").value=f.failbackSec;$("dataTimeoutSec").value=f.dataTimeoutSec;
 $("maxAgeSec").value=f.maxAgeSec;const bp=cfg.benchPosition||{};$("benchLat").value=bp.lat||0;$("benchLon").value=bp.lon||0;$("benchAlt").value=bp.alt||0;$("ggaSec").value=f.ggaSec;$("backoffSec").value=f.backoffSec.join(",");
 $("sources").innerHTML=cfg.ntrip.map(sourceCard).join("");
-let w="";for(let i=0;i<4;i++){const n=cfg.wifi[i]||{};w+=`<label>Network ${i+1}<input id="w${i}ssid" value="${esc(n.ssid)}" placeholder="SSID"></label><label>Password<input type="password" id="w${i}pass" value="${esc(n.pass)}" autocomplete="new-password"></label>`}
+let w="";for(let i=0;i<4;i++){const n=cfg.wifi[i]||{};w+=`<tr><td class="n">${i+1}</td><td><input id="w${i}ssid" value="${esc(n.ssid)}" placeholder="SSID"></td><td><input type="password" id="w${i}pass" value="${esc(n.pass)}" autocomplete="new-password"></td></tr>`}
 $("wifi").innerHTML=w;
 $("deviceName").value=cfg.deviceName;$("bt").value=o.bt;$("tcpPort").value=o.tcpPort;$("usb").checked=o.usb;$("inboundRtcm").checked=o.inboundRtcm;
 $("adminPass").value=cfg.web.adminPass;$("apPass").value=cfg.web.apPass;

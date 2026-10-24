@@ -85,6 +85,9 @@ static void handleStatus()
     t["mount"] = cfg.src[s.source].mount;
     t["host"] = cfg.src[s.source].host;
     t["bytes"] = s.bytes;
+    t["streamBytes"] = s.streamBytes;
+    t["ggaSent"] = s.ggaSent;
+    t["lastGga"] = s.lastGga;
     t["frames"] = s.frames;
     t["crcErrors"] = s.crcErrors;
     t["switches"] = s.switches;
