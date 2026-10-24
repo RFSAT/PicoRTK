@@ -63,6 +63,8 @@ static bool tryStation(uint32_t timeoutMs)
     lastTry = millis();
     if (ok)
     {
+        // Keep the radio awake: in power-save mode the Pico misses incoming connections (web page, TCP clients)
+        WiFi.noLowPowerMode();
         dbg("[net] connected to %s, %s\r\n", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
         startMdns();
         static bool ntp = false;
@@ -101,8 +103,16 @@ void netLoop()
         }
         return;
     }
-    if (WiFi.status() != WL_CONNECTED && now - lastTry > STA_RETRY_MS)
+    bool noIp = WiFi.status() == WL_CONNECTED && WiFi.localIP() == IPAddress(0, 0, 0, 0);
+    if ((WiFi.status() != WL_CONNECTED || noIp) && now - lastTry > STA_RETRY_MS)
+    {
+        if (noIp)
+        {
+            dbg("[net] joined but no IP address, reconnecting\r\n");
+            WiFi.disconnect();
+        }
         tryStation(8000);
+    }
 }
 
 bool netUp() { return !apMode && WiFi.status() == WL_CONNECTED; }
