@@ -63,3 +63,5 @@ bool configLoad();                       // from flash, defaults when missing
 bool configSave();                       // to flash
 String configToJson(bool withSecrets);   // secrets replaced by "********" unless requested
 bool configFromJson(const String &json, String &err); // merges; "********" keeps the stored secret
+bool configReset();                // delete the saved settings: the next start uses the built-in defaults
+bool configHasPrivateDefaults();   // built with tools/make_defaults.py (Wi-Fi and logins compiled in)

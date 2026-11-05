@@ -234,6 +234,7 @@ Dublin, Ireland · Athens, Greece<br>
 <label class="btn" id="uploadLbl" style="text-transform:none;font-size:14px;letter-spacing:0;color:var(--ink)">Upload settings<input type="file" id="upload" accept=".json" hidden></label>
 <button class="btn" id="reboot" type="button">Restart</button>
 <button class="btn" id="shutdown" type="button">Shut down</button>
+<button class="btn" id="factory" type="button">Restore defaults</button>
 </div>
 </section>
 </div>
@@ -257,7 +258,7 @@ function msg(t,c){const m=$("msg");m.textContent=t;m.className=c||""}
 async function status(){
 try{
 const s=await (await fetch("/api/status")).json();
-$("hdr").textContent=`v${s.version} · ${s.wifi.mode} ${s.wifi.ssid||""} ${s.wifi.ip} · up ${Math.floor(s.uptimeSec/60)} min · last reset: ${s.lastReset||"?"}`;
+$("hdr").textContent=`v${s.version}${s.privateDefaults?" (private build)":""} · ${s.wifi.mode} ${s.wifi.ssid||""} ${s.wifi.ip} · up ${Math.floor(s.uptimeSec/60)} min · last reset: ${s.lastReset||"?"}`;
 const g=s.gnss;
 kv($("sGnss"),[
 ["Fix",`<span class="pill q${g.quality??0}">${esc(g.qualityName)}</span>`],
@@ -456,6 +457,9 @@ if(r){const ms=parseInt(r.split(",")[2]),hz=Math.round(1000/ms);if([1,2,5,10].in
 }
 renderProfiles();
 $("nmeaPause").onclick=()=>{nmeaPaused=!nmeaPaused;$("nmeaPause").textContent=nmeaPaused?"Resume":"Pause"};
+$("factory").onclick=async()=>{
+if(!confirm("Delete all saved settings and restart with the defaults built into this firmware?\n\nWi-Fi networks, correction sources and passwords return to the built-in values. Download a backup first if you want to keep the current ones."))return;
+const r=await fetch("/api/factory",{method:"POST"});msg(await r.text(),r.ok?"ok":"err");setTimeout(()=>location.reload(),9000)};
 $("reboot").onclick=async()=>{if(!confirm("Restart the Pico now?\n\nThe correction stream and Bluetooth/TCP links drop for about 20 s."))return;await fetch("/api/reboot",{method:"POST"});setTimeout(()=>location.reload(),8000)};
 $("sendCmd").onclick=async()=>{const r=await fetch("/api/cmd",{method:"POST",body:$("cmd").value});$("saveBar").hidden=false;msg(await r.text(),r.ok?"ok":"err")};
 $("scan").onclick=async()=>{$("scanOut").textContent="scanning…";try{const l=await (await fetch("/api/scan")).json();
@@ -500,6 +504,7 @@ download:"Save all settings, including passwords, as a JSON file.",
 uploadLbl:"Load a settings file saved from this or another PicoRTK. It replaces everything and restarts the Pico.",
 reboot:"Restart the Pico. Corrections and Bluetooth/TCP links drop for about 20 s.",
 shutdown:"Stop everything safely and halt, so the Pico can be unplugged.",
+factory:"Delete the saved settings and restart with the defaults built into this firmware (on a private build: your Wi-Fi and caster logins).",
 save:"Store the settings on all tabs in flash and restart the Pico to apply them.",
 nmeaApply:"Switch the selected messages on and every other listed message off in the LG290P (GGA always stays on, the Pico needs it), set the fix rate, save in the receiver and restart it. The replies are shown below.",
 fixHz:"Position updates per second in the receiver. 1 Hz for static and walking work, 5-10 Hz for vehicles, machines and drones. GSA and GSV stay at 1 Hz. Read from the receiver when this tab opens.",

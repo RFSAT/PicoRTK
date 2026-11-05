@@ -177,6 +177,20 @@ The cores exchange data through lock-free single-producer/single-consumer rings 
 | `firmware/web/index.html` | configuration page, embedded at build time by `tools/embed_web.py` |
 | `tools/fake_caster.py` | bench caster with GOOD / STALL / DROP / AUTH mount points for failover tests |
 
+## Private build with your settings built in
+
+A Pico flashed with a private build starts with your Wi-Fi networks, caster logins and bench position, and does not need the setup access point. Its web page shows "(private build)" next to the version.
+
+```
+python3 tools/make_defaults.py picortk-config.json   # the file from System -> Backup -> Download settings
+bash tools/build.sh                                   # build/PicoRTK.ino.uf2 now carries those defaults
+python3 tools/make_defaults.py --remove               # back to the public defaults
+```
+
+- The generated `firmware/PicoRTK/defaults_local.h` holds passwords in plain text. It is git-ignored: never commit it, and never share the UF2 built with it.
+- The CI firmware on GitHub is built without it.
+- Settings saved on a Pico still take precedence over the built-in ones. **System → Restore defaults** deletes the saved settings and restarts with the built-in ones.
+
 ## Building
 
 ```

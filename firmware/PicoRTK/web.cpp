@@ -51,6 +51,7 @@ static void handleStatus()
     extern const char *bootReason;
     d["lastReset"] = bootReason;
     d["device"] = cfg.deviceName;
+    d["privateDefaults"] = configHasPrivateDefaults();
     d["bluetoothName"] = outputsBtName();
 
     JsonObject w = d["wifi"].to<JsonObject>();
@@ -221,6 +222,17 @@ void webSetup()
         if (!auth())
             return;
         server.send(200, "text/plain", "Restarting");
+        rebootAt = millis() + 1000;
+    });
+    server.on("/api/factory", HTTP_POST, []() {
+        if (!auth())
+            return;
+        if (!configReset())
+        {
+            server.send(500, "text/plain", "Could not delete the saved settings");
+            return;
+        }
+        server.send(200, "text/plain", "Saved settings deleted. Restarting with the built-in defaults.");
         rebootAt = millis() + 1000;
     });
     server.on("/api/shutdown", HTTP_POST, []() {

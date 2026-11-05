@@ -1,2 +1,5 @@
 build/
 *.o
+firmware/PicoRTK/defaults_local.h
+*.private.json
+picortk-config*.json
