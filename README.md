@@ -45,7 +45,7 @@ The Waveshare board (33 × 33 mm) has 9 castellated pads on each side. Use **UAR
 
 - Mount the two boards back to back, with insulating tape and a thin foam pad between them. The LG290P board covers the USB half of the Pico. Its right edge (5V, GND, RXD3, TXD3, RST, PPS) lies across the Pico's USB end, so every wire is under 15 mm. The stack is about 51 × 33 × 11 mm.
 - Keep the Pico's antenna end (the 18 mm opposite the USB) uncovered and away from metal: that is the Wi-Fi and Bluetooth antenna.
-- Bring the GNSS antenna in through an SMA bulkhead on the box wall at the LG290P end, with a short IPEX–SMA pigtail. Use a plastic box.
+- The LG290P board's edge-mounted SMA socket goes out through the box wall; the ANN-MB2 screws straight onto it. Use a plastic box.
 
 **Alternative board: ZJI RF "LG290P Full Freq Dev" (AliExpress).** It carries two 6-pin rows, EN · GND · TX · RX · VCC · PPS, one row for each of the LG290P's two UARTs.
 
