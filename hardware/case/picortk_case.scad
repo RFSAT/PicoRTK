@@ -28,7 +28,7 @@ pico_l     = 51;
 pico_w     = 21;
 pico_t     = 1.0;
 pico_stand = 10;     // column height under the Pico (two columns, antenna end)
-above_pico = 4;      // clearance between the Pico PCB top and the lid
+above_pico = 4.5;    // clearance between the Pico PCB top and the lid (4 mm + 0.5 mm margin)
 
 /* [Clearances to the walls] */
 cable_gap  = 4;      // UART socket edge of the GNSS board to the inside of the front wall
