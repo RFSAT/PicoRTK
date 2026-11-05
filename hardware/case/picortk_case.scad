@@ -28,7 +28,7 @@ pico_l     = 51;
 pico_w     = 21;
 pico_t     = 1.0;
 pico_stand = 10;     // column height under the Pico (two columns, antenna end)
-above_pico = 6;      // free height above the Pico PCB (micro-USB is 2.7 mm, wires over the top)
+above_pico = 4;      // clearance between the Pico PCB top and the lid
 
 /* [Clearances to the walls] */
 cable_gap  = 4;      // UART socket edge of the GNSS board to the inside of the front wall
@@ -115,7 +115,7 @@ module base() {
     for (h = gnss_holes) translate([h[0], h[1], gnss_stand - 6]) cylinder(d = col_pilot, h = 7);
     for (h = pico_holes) translate([h[0], h[1], pico_stand - 6]) cylinder(d = col_pilot, h = 7);
     // lid screw pilots
-    for (b = all_bosses) translate([b[0], b[1], z_in1 - 6]) cylinder(d = m2_pilot, h = 7);   // M2 x 6 thread-forming screws
+    for (b = all_bosses) translate([b[0], b[1], z_in1 - 5]) cylinder(d = m2_pilot, h = 6);   // M2 x 5 countersunk thread-forming screws
     // micro-USB: U-slot from the top of the left wall
     translate([x_in0 - wall - 1, usb_micro_c[0] - usb_micro_w/2, usb_micro_z]) cube([wall + 2, usb_micro_w, z_in1]);
     // USB-C: opening in the front wall
@@ -157,6 +157,8 @@ module lid() {
       cylinder(d = m2_clear, h = 10);
       translate([0, 0, lip_h + 1 + lid_t - (m2_head - m2_clear)/2 + 0.01]) cylinder(d1 = m2_clear, d2 = m2_head, h = (m2_head - m2_clear)/2);
     }
+    // micro-USB: the plug overmould is taller than the space under the lid, so the slot continues through the lid edge
+    translate([x_in0 - wall - 1, usb_micro_c[0] - usb_micro_w/2, z_in1 - lip_h - 1]) cube([wall + 1 + fit, usb_micro_w, lid_t + lip_h + 2]);
     // BOOTSEL access hole and LED window
     translate([bootsel[0], bootsel[1], z_in1 - 1]) cylinder(d = btn_hole, h = lid_t + 2);
     translate([pico_led[0], pico_led[1], z_in1 - 1]) cylinder(d = 2.0, h = lid_t + 2);

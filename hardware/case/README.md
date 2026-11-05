@@ -2,7 +2,7 @@
 
 Two printed parts: `picortk_case_base.stl` and `picortk_case_lid.stl`. Both are generated from the parametric `picortk_case.scad` (OpenSCAD 2021 or later).
 
-**Outside size:** 56 × 42.9 × 21 mm (base 19 mm high, lid 2 mm).
+**Outside size:** 56 × 42.9 × 19 mm (base 17 mm high, lid 2 mm).
 
 ## Layout (mm, floor top = 0)
 
@@ -11,7 +11,7 @@ Two printed parts: `picortk_case_base.stl` and `picortk_case_lid.stl`. Both are 
 | LG290P board, component side down | 7 mm printed columns; its battery reaches the floor |
 | Gap between the boards | 2 mm |
 | Pico 2 W | 10 mm printed columns, at its two antenna-end holes |
-| Free space above the Pico PCB | 6 mm |
+| Pico PCB (1 mm) to the underside of the lid | 4 mm |
 
 - Both boards are flush at the Pico's USB end and centred across.
 - The UART-socket edge of the GNSS board is 4 mm from the front wall, for the cable plug.
@@ -20,7 +20,7 @@ Two printed parts: `picortk_case_base.stl` and `picortk_case_lid.stl`. Both are 
 
 | Opening | Where | How it's made |
 |---|---|---|
-| Pico micro-USB | left wall | U-slot 12 mm wide, closed by the lid |
+| Pico micro-USB | left wall | U-slot 12 mm wide, continued through the lid edge (the plug is taller than the 4 mm space) |
 | LG290P USB-C | front wall | 13 × 7.6 mm opening |
 | SMA | back wall | U-slot; a tab on the lid closes it over the connector; about 6 mm of thread sticks out |
 | BOOTSEL | lid | 3.2 mm hole: press with a toothpick |
@@ -41,7 +41,7 @@ To use M2 heat-set inserts instead, set `col_pilot = 3.2`.
 | Part | Qty |
 |---|---|
 | M2 × 5 thread-forming screw for plastic (boards onto the columns) | 6 |
-| M2 × 6 countersunk thread-forming screw (lid) | 4 |
+| M2 × 5 countersunk thread-forming screw (lid) | 4 |
 
 ## Printing
 
@@ -65,4 +65,4 @@ All of these are parameters at the top of the `.scad` file.
   - LG290P RST: x = 4.6, y = 3.6 from the USB end and UART edge. It must not be covered by the battery.
   - Both were measured from Waveshare and Raspberry Pi drawings.
 - **SMA flange:** the inside of the back wall sits 1.9 mm beyond the GNSS board edge, for the SMA's square flange.
-- **Wires over the Pico:** 6 mm of space is enough for soldered wires. Dupont sockets on upward pins need `above_pico` of about 13.
+- **Wires over the Pico:** 4 mm of space suits wires soldered to the pads. Dupont sockets on upward pins need `above_pico` of about 13.
