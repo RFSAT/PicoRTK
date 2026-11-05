@@ -298,6 +298,22 @@ async function status(){
     $("modeRtk").setAttribute("aria-pressed",curMode==="rtk");$("modeHas").setAttribute("aria-pressed",curMode==="has");
     const P=s.ppp, SOL={0:"no fix",1:"single",2:"SBAS",5:"DGNSS",6:"converging",7:"converged",8:"RTK float",12:"RTK fixed"};
     const hasFix=g.station===9002||(P&&P.diffId===9002&&(P.sol===6||P.sol===7));
+    // Which positioning method the receiver is using, from GGA quality, its base station id and the PPP status
+    const q=g.quality, st=g.station, ntripOn=s.ntrip.state==="streaming", appRtcm=!ntripOn&&s.outputs.inboundFrames>0;
+    const rtcm=ntripOn?"NTRIP · "+s.ntrip.sourceName:appRtcm?"RTCM from a Bluetooth/TCP app":"RTCM corrections";
+    let fixLabel, fixFrom;
+    if(q==null){fixLabel="no data";fixFrom="no NMEA from the receiver"}
+    else if(hasFix){const conv=(P&&P.sol===7)||(!P&&q===4);fixLabel=conv?"HAS converged":"HAS converging";fixFrom="Galileo HAS satellites (E6) · station 9002"}
+    else if(q===4){fixLabel="RTK fixed";fixFrom=rtcm+(st>=0?" · base "+st:"")}
+    else if(q===5){fixLabel="RTK float";fixFrom=rtcm+(st>=0?" · base "+st:"")}
+    else if(q===2){
+      const sbasPrn=st>=120&&st<=158;
+      if(st>=0&&!(sbasPrn&&!ntripOn&&!appRtcm)){fixLabel="DGNSS (RTCM)";fixFrom=rtcm+" · base "+st}
+      else{fixLabel="SBAS (EGNOS)";fixFrom="EGNOS satellites"+(sbasPrn?" · PRN "+st:"")+", about 1 m"}}
+    else if(q===1){fixLabel="GNSS only";fixFrom="no corrections, 1-3 m"}
+    else if(q===0){fixLabel="No fix";fixFrom="waiting for satellites"}
+    else if(q===6){fixLabel="Dead reckoning";fixFrom="no satellites"}
+    else{fixLabel=g.qualityName;fixFrom="–"}
     const m2=v=>v==null||v<0?"–":(v<0.1?(v*100).toFixed(1)+" cm":v<1?(v*100).toFixed(0)+" cm":v.toFixed(2)+" m");
     const acc=g.epeH!=null?`${m2(g.epeH)} H · ${m2(g.epeV)} V`:g.gstH!=null?`${m2(g.gstH)} H · ${m2(g.gstV)} V`:"–";
     const hasRow=P?`${SOL[P.sol]??("type "+P.sol)}${P.h!=null?" · "+m2(P.h):""}${P.age>=0?" · "+P.age.toFixed(0)+" s old":""}`
@@ -306,11 +322,11 @@ async function status(){
       ? "Galileo HAS from the satellites, no internet needed: about 20 cm after it converges (several minutes)."+(hasFix?" HAS solution active.":" Waiting for the HAS solution.")
       : "NTRIP corrections over Wi-Fi: centimetre level."+(s.galileoHas?" Galileo HAS takes over if they stop.":"");
     kv($("sGnss"),[
-      ["Fix",`<span class="pill q${g.quality??0}">${esc(hasFix?((P&&P.sol===7)||(!P&&g.quality===4)?"HAS converged":"HAS converging"):g.qualityName)}</span>`],
+      ["Fix",`<span class="pill q${g.quality??0}">${esc(fixLabel)}</span>`],["Corrections from",esc(fixFrom)],
       ["Accuracy (estimated)",acc],["Galileo HAS",esc(hasRow)],
       ["Satellites",g.sats??"–"],["HDOP",g.hdop??"–"],
       ["Latitude",g.lat??"–"],["Longitude",g.lon??"–"],["Altitude",g.alt!=null?g.alt.toFixed(3)+" m":"–"],
-      ["Correction age",g.age>=0?g.age.toFixed(1)+" s":"–"],["Base station",g.station===9002?"9002 · Galileo HAS":g.station>=0?g.station:"–"],["UTC",g.utc||"–"]]);
+      ["Correction age",g.age>=0?g.age.toFixed(1)+" s":"–"],["Base station",g.station===9002?"9002 · Galileo HAS":g.station>=0?g.station:(fixLabel.startsWith("SBAS")?"none (SBAS)":"–")],["UTC",g.utc||"–"]]);
     const n=s.ntrip;
     kv($("sNtrip"),[
       ["State",esc(n.state)],["Source",`${n.source} · ${esc(n.sourceName)}`],["Caster",esc(n.host)+"/"+esc(n.mount)],
@@ -578,7 +594,8 @@ const HELP={
   nmeaAll:"Clear the selection: every type the receiver outputs is sent.",
   nmeaBw:"Estimated data rate of the selection at this fix rate. BLE manages about 2 kB/s; Bluetooth SPP and TCP much more."};
 const KVHELP={
-  "Fix":"Fix quality from GGA. RTK fixed = centimetre level; RTK float = decimetre level, still converging; GNSS = metre level.",
+"Fix":"Positioning method in use. RTK fixed = centimetre level; RTK float = decimetre level, still converging; DGNSS (RTCM) = code corrections from a base station; SBAS (EGNOS) = satellite-based corrections, about 1 m; HAS converging / converged = Galileo HAS precise point positioning (20 cm or better once converged); GNSS only = no corrections, 1-3 m.",
+  "Corrections from":"Where the corrections in use come from. RTK fixed / float and DGNSS (RTCM) use the NTRIP source shown (or RTCM from a phone app) with its base station number. SBAS (EGNOS) uses the European EGNOS satellites (no base station number, about 1 m). Galileo HAS uses E6 corrections from Galileo (station 9002). GNSS only has no corrections.",
   "Accuracy (estimated)":"The receiver's own error estimate, horizontal (H) and vertical (V), one standard deviation: from PQTMEPE, or from GST when EPE is missing. RTK fixed is typically 1-2 cm, RTK float decimetres, Galileo HAS about 10-20 cm once converged, plain GNSS 1-3 m.",
   "Galileo HAS":"Status of the receiver's PPP engine (PQTMPPPNAV): converging or converged, its horizontal accuracy, the correction station (9002 = Galileo HAS) and the age of the HAS corrections. 'No PPP status' means the receiver firmware does not support PPP.",
   "HDOP":"Horizontal dilution of precision: satellite geometry. Below 1 is good; above 2 is poor.",
