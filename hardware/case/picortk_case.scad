@@ -59,12 +59,14 @@ echo(str("Gap between the boards: ", gap, " mm (set gnss_t to your board's thick
 x_in0 = -side_gap;                     // inside of left wall
 x_in1 = pico_l + side_gap;             // inside of right wall
 y_in0 = gnss_y0 - cable_gap;           // inside of front wall
-y_in1 = gnss_y0 + gnss_w + sma_flange; // inside of back wall, clear of the SMA flange
+y_in1 = gnss_y0 + gnss_w + cable_gap;  // inside of back wall: same gap as the front, so the boards (and the micro-USB) are centred
+sma_y0 = gnss_y0 + gnss_w + sma_flange; // at the SMA the back wall steps in to here, so enough thread sticks out
+sma_bay = 12;                            // width of that step
 z_in1 = pico_top + above_pico;         // underside of the lid
 
 gnss_holes = [[2.5, gnss_y0+2.5], [30.5, gnss_y0+2.5], [2.5, gnss_y0+30.5], [30.5, gnss_y0+30.5]];
 pico_holes = [[49, 4.8], [49, 16.2]];      // the two at the antenna end
-usb_micro_c = [0, 10.5, pico_top + 1.3];   // y, z centre on the left wall
+usb_micro_c = [0, 10.5, pico_top + 1.3];   // x, y, z of the micro-USB socket centre (left wall)
 usbc_c   = [16.5, gnss_stand - 1.6];       // x, z centre on the front wall
 sma_c    = [16.5, gnss_stand + gnss_t/2];  // x, z centre on the back wall
 bootsel  = [12.0, 7.2];                    // Pico BOOTSEL button (top side)
@@ -73,13 +75,9 @@ rst      = [33 - 28.4, gnss_y0 + 9.6];     // LG290P RST button, mirrored becaus
 bootsel_top = pico_top + 1.4;              // button cap height
 rst_tip     = gnss_stand - 1.4;            // button points down
 
-// lid screw bosses: two floor-standing at the front and back right, one floor-standing at the front middle,
-// one wall-hung (corbel) at the back left above the GNSS board
+// lid screw bosses, all floor-standing and clear of both boards
 bi = boss_r - 0.4;   // bosses overlap the walls by 0.4 mm
-bosses_floor = [[36.5, y_in0 + bi], [x_in1 - bi, y_in0 + bi], [x_in1 - bi, y_in1 - bi]];
-boss_corbel  = [10, y_in1 - bi];     // clear of the GNSS screw at the back-left corner and of the SMA
-corbel_z0    = gnss_top + boss_r + 0.5;   // its support cone ends 0.5 mm above the GNSS board
-all_bosses   = concat(bosses_floor, [boss_corbel]);
+all_bosses = [[36.5, y_in0 + bi], [x_in1 - bi, y_in0 + bi], [x_in1 - bi, y_in1 - bi], [6.5, y_in1 - bi]];
 
 module rrect(x0, x1, y0, y1, r) { // rounded rectangle in the xy plane
   hull() for (x = [x0 + r, x1 - r], y = [y0 + r, y1 - r]) translate([x, y]) circle(r = r);
@@ -104,12 +102,9 @@ module base() {
         cylinder(d1 = col_d_pico + 2, d2 = col_d_pico, h = 1);
       }
       // lid screw bosses
-      for (b = bosses_floor) translate([b[0], b[1], 0]) cylinder(r = boss_r, h = z_in1);
-      // back-left boss hangs from the walls above the GNSS board, with a 45-degree cone under it for printing
-      translate([boss_corbel[0], boss_corbel[1], corbel_z0]) {
-        cylinder(r = boss_r, h = z_in1 - corbel_z0);
-        translate([0, 0, -boss_r + 0.5]) cylinder(r1 = 0.5, r2 = boss_r, h = boss_r - 0.5);
-      }
+      for (b = all_bosses) translate([b[0], b[1], 0]) cylinder(r = boss_r, h = z_in1);
+      // SMA bay: the back wall steps in to the SMA flange over sma_bay mm
+      translate([sma_c[0] - sma_bay/2 - wall, sma_y0, -floor_t]) cube([sma_bay + 2*wall, y_in1 - sma_y0 + 0.5, z_in1 + floor_t]);
     }
     // screw pilots in the board columns (6 mm deep)
     for (h = gnss_holes) translate([h[0], h[1], gnss_stand - 6]) cylinder(d = col_pilot, h = 7);
@@ -117,13 +112,14 @@ module base() {
     // lid screw pilots
     for (b = all_bosses) translate([b[0], b[1], z_in1 - 5]) cylinder(d = m2_pilot, h = 6);   // M2 x 5 countersunk thread-forming screws
     // micro-USB: U-slot from the top of the left wall
-    translate([x_in0 - wall - 1, usb_micro_c[0] - usb_micro_w/2, usb_micro_z]) cube([wall + 2, usb_micro_w, z_in1]);
+    translate([x_in0 - wall - 1, usb_micro_c[1] - usb_micro_w/2, usb_micro_z]) cube([wall + 2, usb_micro_w, z_in1]);
     // USB-C: opening in the front wall
     translate([usbc_c[0], y_in0 + 1, usbc_c[1]]) rotate([90, 0, 0]) linear_extrude(wall + 2)
       rrect(-usbc_w/2, usbc_w/2, -usbc_h/2, usbc_h/2, 1.5);
     // SMA: U-slot in the back wall, closed from above by a tab on the lid (about 6 mm of thread sticks out)
-    translate([sma_c[0], y_in1 - 1, sma_c[1]]) rotate([-90, 0, 0]) cylinder(d = sma_d, h = wall + 2);
-    translate([sma_c[0] - sma_d/2, y_in1 - 1, sma_c[1]]) cube([sma_d, wall + 2, z_in1]);
+    translate([sma_c[0] - sma_bay/2, y_in1, -floor_t - 1]) cube([sma_bay, wall + 1, z_in1 + floor_t + 2]);   // outside of the bay
+    translate([sma_c[0], sma_y0 - 1, sma_c[1]]) rotate([-90, 0, 0]) cylinder(d = sma_d, h = y_in1 - sma_y0 + 2);
+    translate([sma_c[0] - sma_d/2, sma_y0 - 1, sma_c[1]]) cube([sma_d, y_in1 - sma_y0 + 2, z_in1]);
     // RST access hole through the floor (the button faces down)
     translate([rst[0], rst[1], -floor_t - 1]) cylinder(d = btn_hole, h = floor_t + 2);
   }
@@ -143,13 +139,13 @@ module lid() {
             rrect(x_in0 + fit + lip_t, x_in1 - fit - lip_t, y_in0 + fit + lip_t, y_in1 - fit - lip_t, 0.3);
           }
         for (b = all_bosses) translate([b[0], b[1], 0]) cylinder(r = boss_r + 0.4, h = 100);
-        translate([x_in0 - 1, usb_micro_c[0] - usb_micro_w/2 - 0.5, 0]) cube([lip_t + 2, usb_micro_w + 1, 100]);
-        translate([sma_c[0] - sma_d/2 - 0.5, y_in1 - lip_t - 1, 0]) cube([sma_d + 1, lip_t + 2, 100]);
+        translate([x_in0 - 1, usb_micro_c[1] - usb_micro_w/2 - 0.5, 0]) cube([lip_t + 2, usb_micro_w + 1, 100]);
+        translate([sma_c[0] - sma_bay/2 - wall - fit, sma_y0 - fit, 0]) cube([sma_bay + 2*wall + 2*fit, y_in1 - sma_y0 + 2, 100]);
       }
       // tab that fills the SMA U-slot down to the connector
       difference() {
-        translate([sma_c[0] - sma_d/2 + fit/2, y_in1 + fit/2, sma_c[1]]) cube([sma_d - fit, wall - fit, z_in1 - sma_c[1] + 0.01]);
-        translate([sma_c[0], y_in1 - 1, sma_c[1]]) rotate([-90, 0, 0]) cylinder(d = sma_d + 0.3, h = wall + 2);
+        translate([sma_c[0] - sma_d/2 + fit/2, sma_y0 + fit/2, sma_c[1]]) cube([sma_d - fit, y_in1 - sma_y0 - fit, z_in1 - sma_c[1] + 0.01]);
+        translate([sma_c[0], sma_y0 - 1, sma_c[1]]) rotate([-90, 0, 0]) cylinder(d = sma_d + 0.3, h = y_in1 - sma_y0 + 2);
       }
     }
     // screws, countersunk
@@ -158,7 +154,7 @@ module lid() {
       translate([0, 0, lip_h + 1 + lid_t - (m2_head - m2_clear)/2 + 0.01]) cylinder(d1 = m2_clear, d2 = m2_head, h = (m2_head - m2_clear)/2);
     }
     // micro-USB: the plug overmould is taller than the space under the lid, so the slot continues through the lid edge
-    translate([x_in0 - wall - 1, usb_micro_c[0] - usb_micro_w/2, z_in1 - lip_h - 1]) cube([wall + 1 + fit, usb_micro_w, lid_t + lip_h + 2]);
+    translate([x_in0 - wall - 1, usb_micro_c[1] - usb_micro_w/2, z_in1 - lip_h - 1]) cube([wall + 1 + fit, usb_micro_w, lid_t + lip_h + 2]);
     // BOOTSEL access hole and LED window
     translate([bootsel[0], bootsel[1], z_in1 - 1]) cylinder(d = btn_hole, h = lid_t + 2);
     translate([pico_led[0], pico_led[1], z_in1 - 1]) cylinder(d = 2.0, h = lid_t + 2);

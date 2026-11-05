@@ -2,7 +2,7 @@
 
 Two printed parts: `picortk_case_base.stl` and `picortk_case_lid.stl`. Both are generated from the parametric `picortk_case.scad` (OpenSCAD 2021 or later).
 
-**Outside size:** 56 × 42.9 × 19.5 mm (base 17.5 mm high, lid 2 mm).
+**Outside size:** 56 × 45 × 19.5 mm (base 17.5 mm high, lid 2 mm).
 
 ## Layout (mm, floor top = 0)
 
@@ -14,7 +14,8 @@ Two printed parts: `picortk_case_base.stl` and `picortk_case_lid.stl`. Both are 
 | Pico PCB (1 mm) to the underside of the lid | 4.5 mm (4 mm + 0.5 mm margin) |
 
 - Both boards are flush at the Pico's USB end and centred across.
-- The UART-socket edge of the GNSS board is 4 mm from the front wall, for the cable plug.
+- The GNSS board is 4 mm from the front wall (for the UART cable plug) and 4 mm from the back wall, so the boards and the micro-USB slot are centred on the case.
+- At the SMA, the back wall steps in to the connector's flange over 12 mm, so about 6 mm of thread still sticks out.
 
 ## Openings
 
@@ -64,5 +65,5 @@ All of these are parameters at the top of the `.scad` file.
   - Pico BOOTSEL: x = 12.0, y = 7.2 from the USB end and pin-1 edge.
   - LG290P RST: x = 4.6, y = 3.6 from the USB end and UART edge. It must not be covered by the battery.
   - Both were measured from Waveshare and Raspberry Pi drawings.
-- **SMA flange:** the inside of the back wall sits 1.9 mm beyond the GNSS board edge, for the SMA's square flange.
+- **SMA flange:** at the SMA the wall steps in to 1.9 mm beyond the GNSS board edge (`sma_flange`), for the connector's square flange.
 - **Wires over the Pico:** 4.5 mm of space suits wires soldered to the pads. Dupont sockets on upward pins need `above_pico` of about 13.
