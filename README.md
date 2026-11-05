@@ -29,7 +29,7 @@ The Waveshare board (33 × 33 mm) has 9 castellated pads on each side. Use **UAR
 
 **Prototype assembly (current):** no soldering on the GNSS board.
 
-- Join the boards with the supplied SH1.0 4-pin cable on the LG290P's UART socket: RXD3 → GP0 (pin 1), TXD3 → GP1 (pin 2), GND → pin 3, and 3V3 → 3V3 OUT (pin 36).
+- Join the boards with the supplied SH1.0 4-pin cable on the LG290P's UART socket: yellow RXD3 → GP0 (pin 1), orange TXD3 → GP1 (pin 2), black GND → pin 3, and red 3V3 → 3V3 OUT (pin 36). Check that orange sits next to red at the socket (printed order GND · 3V3 · TXD3 · RXD3).
   - The socket's 3V3 pin is the board's own 3.3 V rail (Waveshare schematic), so this one cable powers the GNSS board too.
   - While the cable is connected, leave the GNSS board's USB-C empty, so that two regulators never share the rail.
 - Stick the boards back to back with 1–2 mm foam tape:
