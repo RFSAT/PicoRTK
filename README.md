@@ -216,6 +216,14 @@ The Methods tab also keeps a **history**: one record every 10 s with the UTC dat
 - **Download CSV** (`GET /api/history.csv`) sends everything, oldest first. While it is sent (a few seconds), the correction stream and Bluetooth/TCP pause. **Clear history** (`POST /api/history/clear`) deletes it. `GET /api/history` returns the record count and time span.
 - Flashing a new UF2 keeps the history, like the settings.
 
+### Restart recorder
+
+Each processor core writes a checkpoint number as it works (one RAM write per step). The numbers survive a restart, and a hard fault also records the code address. After a crash or a watchdog restart, the next start reports where the previous run stopped:
+
+- **System tab → Last restart**, and `previousRun` / `previousRunProblem` in `/api/status`, e.g. "hung, restarted by the watchdog; core 0 at 3 web server, core 1 at 35 waiting for shared data".
+- On USB once at start-up (`[boot] previous run: ...`), before the receiver stream starts.
+- Restart and Shut down from the page are recorded as a normal end. A crash address maps to a source line with `arm-none-eabi-addr2line -e PicoRTK.ino.elf <pc>` on the ELF of the same build.
+
 ## Private build with your settings built in
 
 A Pico flashed with a private build starts with your Wi-Fi networks, caster logins and bench position, and does not need the setup access point. Its web page shows "(private build)" next to the version.

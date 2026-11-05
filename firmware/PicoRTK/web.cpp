@@ -52,7 +52,8 @@ static void handleStatus()
     d["uptimeSec"] = now / 1000;
     extern const char *bootReason;
     d["lastReset"] = bootReason;
-    d["diag"] = diagText();
+    d["previousRun"] = diagText();
+    d["previousRunProblem"] = diagProblem();
     d["device"] = cfg.deviceName;
     d["privateDefaults"] = configHasPrivateDefaults();
     d["mode"] = cfg.mode;

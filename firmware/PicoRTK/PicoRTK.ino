@@ -53,6 +53,7 @@ static const uint32_t CORE0_STALL_MS = 60000;  // longest blocking call on core 
 
 void safeReboot()
 {
+    diagC0 = DIAG_CLEAN;
     historyFlush(); // keep the last minutes of history
     // Safety net first: whatever happens below, the watchdog resets the chip within 3 s
     wdtArmed = false;
@@ -72,6 +73,7 @@ void safeReboot()
 void safeShutdown()
 {
     dbg("[boot] shutting down\r\n");
+    diagC0 = DIAG_CLEAN;
     historyFlush();
     ntripStop();
     outputsStop();
@@ -114,8 +116,9 @@ void setup()
     for (uint32_t t = millis(); !Serial && millis() - t < 1500;)
         delay(10);
     bootReason = resetReasonName();
-    diagBoot();
-    dbg("\r\n[boot] PicoRTK %s, last reset: %s\r\n", PICORTK_VERSION, bootReason);
+    diagBoot(rp2040.getResetReason() == RP2040::WDT_RESET);
+    dbg("\r\n[boot] PicoRTK %s, last reset: %s\r\n[boot] previous run: %s\r\n", PICORTK_VERSION, bootReason,
+        diagText().c_str());
     diagC0 = 101;
     receiverInitShared();
     diagC0 = 102;
@@ -235,13 +238,7 @@ void loop()
     diagC0 = 8;
     historyLoop();
     diagC0 = 9;
-    // Fault finding: repeat the previous run's record on USB for the first 2 minutes
-    static uint32_t lastDiag = 0;
-    if (millis() < 120000 && millis() - lastDiag > 3000)
-    {
-        lastDiag = millis();
-        Serial.printf("\r\n[diag %s] %s | now c1=%lu\r\n", PICORTK_VERSION, diagText().c_str(), (unsigned long)diagC1);
-    }
+
     if (bootCmdsAt && (int32_t)(millis() - bootCmdsAt) > 0)
     {
         bootCmdsAt = 0;

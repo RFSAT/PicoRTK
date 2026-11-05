@@ -76,6 +76,8 @@ pre{margin:0;background:var(--code);color:var(--codeink);font:12.5px/1.5 var(--m
 .meth td:first-child{font-family:var(--sans);font-weight:600}
 .meth tr.run td:first-child::before{content:"● ";color:var(--ok)}
 .meth tr.off td{color:var(--muted)}
+.kv.warn dd{color:var(--warn);font-weight:600}
+#restartInfo dd{white-space:normal;overflow:visible}
 .methbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin-top:8px}
 .outline{margin:8px 0 0;font-size:13px}
 .outline.hold{color:var(--warn);font-weight:600}
@@ -301,6 +303,11 @@ Dublin, Ireland · Athens, Greece<br>
 <button class="btn" id="factory" type="button">Restore defaults</button>
 </div>
 </section>
+<section>
+<h2>Last restart</h2>
+<p class="hint" data-help="The firmware records which step each processor core is working on. If the Pico crashes or hangs and the watchdog restarts it, the next start reports where the previous run stopped (and, for a crash, the code address). Send this line with any fault report.">Why the previous run ended, recorded by the firmware.</p>
+<dl class="kv" id="restartInfo"></dl>
+</section>
 </div>
 <div class="row" id="saveBar" hidden><button class="btn primary" id="save" type="button">Save and restart</button><span id="msg"></span></div>
 </main>
@@ -330,6 +337,8 @@ function msg(t,c){const m=$("msg");m.textContent=t;m.className=c||""}
 async function status(){
 try{
 const s=await (await fetch("/api/status")).json();
+kv($("restartInfo"),[["Reset reason",s.lastReset||"?"],["Previous run",esc(s.previousRun||"–")]]);
+$("restartInfo").classList.toggle("warn",!!s.previousRunProblem);
 $("hdr").textContent=`v${s.version}${s.privateDefaults?" (private build)":""} · ${s.wifi.mode} ${s.wifi.ssid||""} ${s.wifi.ip} · up ${Math.floor(s.uptimeSec/60)} min · last reset: ${s.lastReset||"?"}`;
 const g=s.gnss;
 curMode=s.mode||"rtk";
