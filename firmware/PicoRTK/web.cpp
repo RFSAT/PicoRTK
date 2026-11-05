@@ -81,6 +81,32 @@ static void handleStatus()
     else
         n["qualityName"] = "no data from receiver";
 
+    // Accuracy estimates (only those that arrived in the last 5 s)
+    SharedAccuracy a;
+    getAccuracy(a);
+    if (a.gstAtMs && now - a.gstAtMs < 5000)
+    {
+        n["gstH"] = sqrtf(a.gstLat * a.gstLat + a.gstLon * a.gstLon);
+        n["gstV"] = a.gstAlt;
+    }
+    if (a.epeAtMs && now - a.epeAtMs < 5000)
+    {
+        n["epeH"] = a.epe2d;
+        n["epeV"] = fabsf(a.epeDown);
+    }
+    if (a.pppAtMs && now - a.pppAtMs < 5000)
+    {
+        JsonObject p = d["ppp"].to<JsonObject>();
+        p["sol"] = a.ppp.sol;
+        if (a.ppp.latStd >= 0 && a.ppp.lonStd >= 0)
+            p["h"] = sqrtf(a.ppp.latStd * a.ppp.latStd + a.ppp.lonStd * a.ppp.lonStd);
+        if (a.ppp.altStd >= 0)
+            p["v"] = a.ppp.altStd;
+        p["diffId"] = a.ppp.diffId;
+        p["age"] = a.ppp.diffAge;
+        p["sats"] = a.ppp.satUsed;
+    }
+
     NtripStatus s;
     ntripStatus(s);
     JsonObject t = d["ntrip"].to<JsonObject>();

@@ -159,9 +159,25 @@ void sendHasCommand()
         cmdToRx.write((const uint8_t *)out, n);
 }
 
+// Accuracy and HAS status for the Home page: GST, PQTMEPE and PQTMPPPNAV on the Pico's UART (not saved in the
+// receiver; the Bluetooth/TCP filter on the NMEA tab still decides what reaches apps)
+static void sendAccuracyCommands()
+{
+    static const char *const cmds[] = {"$PQTMCFGMSGRATE,W,GST,1", "$PQTMCFGMSGRATE,W,PQTMEPE,1,2",
+                                       "$PQTMCFGMSGRATE,W,PQTMPPPNAV,1,1"};
+    for (const char *c : cmds)
+    {
+        char out[64];
+        size_t n = nmeaFinish(c, out, sizeof(out));
+        if (n)
+            cmdToRx.write((const uint8_t *)out, n);
+    }
+}
+
 static void sendBootCommands()
 {
     sendHasCommand();
+    sendAccuracyCommands();
     for (int i = 0; i < CFG_MAX_BOOTCMDS; i++)
     {
         if (!cfg.bootCmd[i].length())

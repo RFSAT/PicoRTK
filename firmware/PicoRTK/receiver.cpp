@@ -8,6 +8,7 @@ SpscRing<16384> rtcmToRx;
 SpscRing<1024> cmdToRx;
 SpscRing<16384> nmeaToNet;
 SharedGga sharedGga;
+static SharedAccuracy sharedAcc;
 mutex_t ggaMutex;
 Stats stats;
 std::atomic<bool> configReady{false};
@@ -73,6 +74,48 @@ static void countType(const char *id, bool sent)
     mutex_exit(&typesMutex);
 }
 
+void getAccuracy(SharedAccuracy &out)
+{
+    mutex_enter_blocking(&ggaMutex);
+    out = sharedAcc;
+    mutex_exit(&ggaMutex);
+}
+
+static void parseAccuracy(const char *s, size_t len, const char *id)
+{
+    uint32_t now = millis();
+    if (strcmp(id, "GST") == 0)
+    {
+        float a, b, c;
+        if (nmeaParseGst(s, len, a, b, c))
+        {
+            mutex_enter_blocking(&ggaMutex);
+            sharedAcc.gstLat = a; sharedAcc.gstLon = b; sharedAcc.gstAlt = c; sharedAcc.gstAtMs = now;
+            mutex_exit(&ggaMutex);
+        }
+    }
+    else if (strcmp(id, "PQTMEPE") == 0)
+    {
+        float n, e, d, h, v;
+        if (nmeaParseEpe(s, len, n, e, d, h, v))
+        {
+            mutex_enter_blocking(&ggaMutex);
+            sharedAcc.epe2d = h; sharedAcc.epeDown = d; sharedAcc.epeAtMs = now;
+            mutex_exit(&ggaMutex);
+        }
+    }
+    else if (strcmp(id, "PQTMPPPNAV") == 0)
+    {
+        PppNav p;
+        if (nmeaParsePppNav(s, len, p))
+        {
+            mutex_enter_blocking(&ggaMutex);
+            sharedAcc.ppp = p; sharedAcc.pppAtMs = now;
+            mutex_exit(&ggaMutex);
+        }
+    }
+}
+
 bool getLatestGga(SharedGga &out)
 {
     mutex_enter_blocking(&ggaMutex);
@@ -127,6 +170,7 @@ static void handleSentence(const char *s, size_t len)
     {
         send = allowed(id);
         countType(id, send);
+        parseAccuracy(s, len, id);
     }
     if (send)
         nmeaToNet.write((const uint8_t *)s, len); // dropped if nobody drains the ring

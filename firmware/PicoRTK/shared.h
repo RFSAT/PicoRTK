@@ -52,5 +52,14 @@ extern char rxReplies[RX_REPLIES][NMEA_MAX + 1];
 extern uint32_t rxReplySeq; // total replies since start-up; newest is at (rxReplySeq-1) % RX_REPLIES
 extern std::atomic<bool> core1Halt; // safe shutdown: core 1 stops touching the UART
 
+// Latest accuracy estimates from the receiver (core 1 writes, core 0 reads under ggaMutex)
+struct SharedAccuracy
+{
+    float gstLat = -1, gstLon = -1, gstAlt = -1;  uint32_t gstAtMs = 0;   // GST standard deviations
+    float epe2d = -1, epeDown = -1;                uint32_t epeAtMs = 0;   // PQTMEPE
+    PppNav ppp;                                    uint32_t pppAtMs = 0;   // PQTMPPPNAV (Galileo HAS)
+};
+void getAccuracy(SharedAccuracy &out);
+
 // Copy the latest GGA (thread-safe). Returns false when none has arrived yet.
 bool getLatestGga(SharedGga &out);

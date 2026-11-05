@@ -1,5 +1,6 @@
 // nmea.cpp - see nmea.h
 #include "nmea.h"
+#include <stdlib.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -149,6 +150,71 @@ bool nmeaIsReply(const char *s, size_t len)
             return true;
     return (rest >= 2 && strncmp(comma + 1, "OK", 2) == 0 && (rest == 2 || comma[3] == ',' || comma[3] == '*')) ||
            (rest >= 5 && strncmp(comma + 1, "ERROR", 5) == 0);
+}
+
+// Split the fields after the sentence id into f[] (pointers into buf); returns the field count
+static int nmeaFields(const char *s, size_t len, char *buf, size_t bufSize, const char **f, int maxF)
+{
+    size_t n = len < bufSize - 1 ? len : bufSize - 1;
+    memcpy(buf, s, n);
+    buf[n] = 0;
+    char *star = strchr(buf, '*');
+    if (star)
+        *star = 0;
+    char *p = strchr(buf, ',');
+    int k = 0;
+    while (p && k < maxF)
+    {
+        *p++ = 0;
+        f[k++] = p;
+        p = strchr(p, ',');
+    }
+    return k;
+}
+
+static bool numField(const char *f, float &v)
+{
+    if (!f || !*f)
+        return false;
+    char *end;
+    v = strtof(f, &end);
+    return end != f;
+}
+
+bool nmeaParseGst(const char *s, size_t len, float &latStd, float &lonStd, float &altStd)
+{
+    char buf[NMEA_MAX + 1];
+    const char *f[12];
+    int k = nmeaFields(s, len, buf, sizeof(buf), f, 12);
+    return k >= 8 && numField(f[5], latStd) && numField(f[6], lonStd) && numField(f[7], altStd);
+}
+
+bool nmeaParseEpe(const char *s, size_t len, float &north, float &east, float &down, float &h2d, float &v3d)
+{
+    char buf[NMEA_MAX + 1];
+    const char *f[8];
+    int k = nmeaFields(s, len, buf, sizeof(buf), f, 8);
+    return k >= 6 && numField(f[1], north) && numField(f[2], east) && numField(f[3], down) && numField(f[4], h2d) &&
+           numField(f[5], v3d);
+}
+
+bool nmeaParsePppNav(const char *s, size_t len, PppNav &out)
+{
+    char buf[NMEA_MAX + 1];
+    const char *f[48];
+    int k = nmeaFields(s, len, buf, sizeof(buf), f, 48);
+    if (k < 28)
+        return false;
+    float v;
+    out = PppNav();
+    if (numField(f[10], v)) out.sol = (int)v;
+    numField(f[18], out.latStd);
+    numField(f[19], out.lonStd);
+    numField(f[20], out.altStd);
+    if (numField(f[23], v)) out.diffId = (int)v;
+    numField(f[24], out.diffAge);
+    if (numField(f[27], v)) out.satUsed = (int)v;
+    return out.sol >= 0;
 }
 
 bool nmeaIsGga(const char *s, size_t len)

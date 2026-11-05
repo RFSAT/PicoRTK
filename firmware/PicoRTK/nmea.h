@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 
-static const size_t NMEA_MAX = 128; // NMEA limit is 82, Quectel PQTM replies can be longer
+static const size_t NMEA_MAX = 255; // NMEA limit is 82; Quectel PQTMPPPNAV / PQTMNAV / PQTMPVT reach about 230
 
 // Collects bytes from the receiver and returns complete sentences ("$...*hh\r\n").
 // Bytes that are not part of an NMEA sentence (binary, RTCM echoes) are ignored here;
@@ -59,6 +59,22 @@ static const size_t NMEA_ID_MAX = 20; // "PQTMGEOFENCESTATUS" + NUL
 // True for a receiver reply to a command rather than a periodic message:
 // "$PQTM<cmd>,OK...", "$PQTM<cmd>,ERROR,...", and the version / id / serial-number replies.
 bool nmeaIsReply(const char *s, size_t len);
+
+// Accuracy messages (checksum already verified). Missing fields return false.
+// GST: standard deviation of latitude, longitude, altitude (m)
+bool nmeaParseGst(const char *s, size_t len, float &latStd, float &lonStd, float &altStd);
+// PQTMEPE (version 2): estimated error north, east, down, 2D, 3D (m)
+bool nmeaParseEpe(const char *s, size_t len, float &north, float &east, float &down, float &h2d, float &v3d);
+// PQTMPPPNAV (version 1): PPP / Galileo HAS solution status
+struct PppNav
+{
+    int sol = -1;        // 0 none, 1 single, 2 SBAS, 5 DGNSS, 6 PPP converging, 7 PPP converged, 8 RTK float, 12 RTK fixed
+    float latStd = -1, lonStd = -1, altStd = -1;
+    int diffId = -1;     // 9002 = Galileo HAS, 9001 = BDS B2b
+    float diffAge = -1;  // s
+    int satUsed = -1;
+};
+bool nmeaParsePppNav(const char *s, size_t len, PppNav &out);
 
 // True when the sentence is a GGA from any talker ($GPGGA, $GNGGA, ...)
 bool nmeaIsGga(const char *s, size_t len);

@@ -1,3 +1,4 @@
+#include <cmath>
 // Host unit tests for the portable PicoRTK modules.
 // Build: g++ -std=c++17 -Wall -I../firmware/PicoRTK test_main.cpp ../firmware/PicoRTK/{nmea,rtcm,selector,ntrip_proto}.cpp -o t && ./t
 #include "nmea.h"
@@ -97,6 +98,23 @@ static void testNmea()
     const char *gf = "$PQTMGEOFENCESTATUS,1,120635.000,0,0,0,0*00";
     char id20[NMEA_ID_MAX];
     CHECK(nmeaSentenceId(gf, strlen(gf), id20, sizeof(id20)) && strcmp(id20, "PQTMGEOFENCESTATUS") == 0);
+
+    // Accuracy messages
+    {
+        float a, b, c;
+        const char *gst = "$GNGST,114915.60,1.2,0.9,0.7,45.0,0.012,0.015,0.031*5A";
+        CHECK(nmeaParseGst(gst, strlen(gst), a, b, c) && fabsf(a - 0.012f) < 1e-6 && fabsf(b - 0.015f) < 1e-6 && fabsf(c - 0.031f) < 1e-6);
+        const char *gst0 = "$GNGST,114915.60,,,,,,,*5A";
+        CHECK(!nmeaParseGst(gst0, strlen(gst0), a, b, c));
+        float n, e, d, h, v;
+        const char *epe = "$PQTMEPE,2,0.021,0.018,0.040,0.028,0.049*00";
+        CHECK(nmeaParseEpe(epe, strlen(epe), n, e, d, h, v) && fabsf(h - 0.028f) < 1e-6 && fabsf(d - 0.040f) < 1e-6);
+        // PQTMPPPNAV: sol type field 10, stds 18-20, diff id 23, age 24, sats used 27
+        const char *ppp = "$PQTMPPPNAV,1,1,1,190423.000,20241224,212681000,2346,18,1,,7,,31.45874521,117.41532415,45.123,0.5,,,0.081,0.064,0.150,,,9002,12.0,,31,24,,,,,,,0.01,0.02,0.01,0.02,,,123.4,,*00";
+        PppNav pn;
+        CHECK(nmeaParsePppNav(ppp, strlen(ppp), pn) && pn.sol == 7 && pn.diffId == 9002 && fabsf(pn.diffAge - 12.0f) < 1e-6 &&
+              fabsf(pn.latStd - 0.081f) < 1e-6 && fabsf(pn.altStd - 0.150f) < 1e-6 && pn.satUsed == 24);
+    }
 
     // nmeaFinish keeps an existing checksum
     char out[64];

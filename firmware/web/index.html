@@ -237,8 +237,13 @@ dt[data-help],th[data-help]{text-decoration:underline dotted var(--muted);text-u
   </section>
   <section>
     <h2>Send a command now</h2>
-    <p class="hint">Quectel PQTM commands, for example <code>$PQTMVERNO</code>. Replies appear on USB and in the NMEA stream.</p>
+    <p class="hint">Quectel PQTM commands, for example <code>$PQTMVERNO</code> (firmware version) or <code>$PQTMCFGPPP,R</code> (Galileo HAS setting). The reply appears below.</p>
     <div class="row"><input id="cmd" placeholder="$PQTMVERNO" style="flex:1;min-width:0"><button class="btn" id="sendCmd" type="button">Send</button></div>
+  </section>
+  <section>
+    <h2>Receiver replies</h2>
+    <p class="hint">Answers to commands (OK, ERROR, version), newest last. They are kept here even when the NMEA stream is busy.</p>
+    <pre id="rxReplies" style="max-height:220px">No replies yet.</pre>
   </section>
 </div>
 
@@ -262,7 +267,12 @@ dt[data-help],th[data-help]{text-decoration:underline dotted var(--muted);text-u
 <div id="tip" role="tooltip" hidden></div>
 <script>
 const $=id=>document.getElementById(id);
-let curMode="rtk";
+let curMode="rtk", rxVisible=false;
+async function repliesPoll(once){
+  if(!rxVisible&&!once) return;
+  try{const d=await (await fetch("/api/nmea")).json();const r=d.replies||[];if(r.length){const el=$("rxReplies");el.textContent=r.join("\n");el.scrollTop=el.scrollHeight}}catch(e){}
+  if(!once) setTimeout(repliesPoll,1500);
+}
 let cfg=null, nmeaVisible=false, nmeaPaused=false, nmeaSel=new Set(), nmeaCounts={};
 const TYPES={base:"Own base",vrs:"VRS",near:"Nearest station",other:"Other"};
 
@@ -271,6 +281,7 @@ document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll("nav button").forEach(x=>x.setAttribute("aria-selected",x===b));
   document.querySelectorAll("[data-page]").forEach(p=>p.hidden=p.dataset.page!==b.dataset.tab);
   $("saveBar").hidden=!["corr","net","rx","nmea"].includes(b.dataset.tab);
+  rxVisible=b.dataset.tab==="rx"; if(rxVisible) repliesPoll();
   nmeaVisible=b.dataset.tab==="nmea"; if(nmeaVisible){nmeaPoll(); if(!readFixRate.done){readFixRate.done=1;readFixRate()}}
 });
 
@@ -285,12 +296,18 @@ async function status(){
     const g=s.gnss;
     curMode=s.mode||"rtk";
     $("modeRtk").setAttribute("aria-pressed",curMode==="rtk");$("modeHas").setAttribute("aria-pressed",curMode==="has");
-    const hasFix=g.station===9002;
+    const P=s.ppp, SOL={0:"no fix",1:"single",2:"SBAS",5:"DGNSS",6:"converging",7:"converged",8:"RTK float",12:"RTK fixed"};
+    const hasFix=g.station===9002||(P&&P.diffId===9002&&(P.sol===6||P.sol===7));
+    const m2=v=>v==null||v<0?"–":(v<0.1?(v*100).toFixed(1)+" cm":v<1?(v*100).toFixed(0)+" cm":v.toFixed(2)+" m");
+    const acc=g.epeH!=null?`${m2(g.epeH)} H · ${m2(g.epeV)} V`:g.gstH!=null?`${m2(g.gstH)} H · ${m2(g.gstV)} V`:"–";
+    const hasRow=P?`${SOL[P.sol]??("type "+P.sol)}${P.h!=null?" · "+m2(P.h):""}${P.age>=0?" · "+P.age.toFixed(0)+" s old":""}`
+      :(curMode==="has"?"no status (PPP?)":"–");
     $("modeNote").textContent=curMode==="has"
       ? "Galileo HAS from the satellites, no internet needed: about 20 cm after it converges (several minutes)."+(hasFix?" HAS solution active.":" Waiting for the HAS solution.")
       : "NTRIP corrections over Wi-Fi: centimetre level."+(s.galileoHas?" Galileo HAS takes over if they stop.":"");
     kv($("sGnss"),[
-      ["Fix",`<span class="pill q${g.quality??0}">${esc(hasFix?"Galileo HAS"+(g.quality===4?" (converged)":g.quality===5?" (converging)":""):g.qualityName)}</span>`],
+      ["Fix",`<span class="pill q${g.quality??0}">${esc(hasFix?((P&&P.sol===7)||(!P&&g.quality===4)?"HAS converged":"HAS converging"):g.qualityName)}</span>`],
+      ["Accuracy (estimated)",acc],["Galileo HAS",esc(hasRow)],
       ["Satellites",g.sats??"–"],["HDOP",g.hdop??"–"],
       ["Latitude",g.lat??"–"],["Longitude",g.lon??"–"],["Altitude",g.alt!=null?g.alt.toFixed(3)+" m":"–"],
       ["Correction age",g.age>=0?g.age.toFixed(1)+" s":"–"],["Base station",g.station===9002?"9002 · Galileo HAS":g.station>=0?g.station:"–"],["UTC",g.utc||"–"]]);
@@ -507,7 +524,7 @@ $("factory").onclick=async()=>{
   if(!confirm("Delete all saved settings and restart with the defaults built into this firmware?\n\nWi-Fi networks, correction sources and passwords return to the built-in values. Download a backup first if you want to keep the current ones."))return;
   const r=await fetch("/api/factory",{method:"POST"});msg(await r.text(),r.ok?"ok":"err");setTimeout(()=>location.reload(),9000)};
 $("reboot").onclick=async()=>{if(!confirm("Restart the Pico now?\n\nThe correction stream and Bluetooth/TCP links drop for about 20 s."))return;await fetch("/api/reboot",{method:"POST"});setTimeout(()=>location.reload(),8000)};
-$("sendCmd").onclick=async()=>{const r=await fetch("/api/cmd",{method:"POST",body:$("cmd").value});$("saveBar").hidden=false;msg(await r.text(),r.ok?"ok":"err")};
+$("sendCmd").onclick=async()=>{const r=await fetch("/api/cmd",{method:"POST",body:$("cmd").value});msg(await r.text(),r.ok?"ok":"err");setTimeout(()=>repliesPoll(true),600)};
 $("scan").onclick=async()=>{$("scanOut").textContent="scanning…";try{const l=await (await fetch("/api/scan")).json();
   $("scanOut").textContent=l.map(n=>`${n.ssid} (${n.rssi} dBm)`).join(", ")||"none found"}catch{$("scanOut").textContent="scan failed"}};
 
@@ -562,6 +579,8 @@ const HELP={
   nmeaBw:"Estimated data rate of the selection at this fix rate. BLE manages about 2 kB/s; Bluetooth SPP and TCP much more."};
 const KVHELP={
   "Fix":"Fix quality from GGA. RTK fixed = centimetre level; RTK float = decimetre level, still converging; GNSS = metre level.",
+  "Accuracy (estimated)":"The receiver's own error estimate, horizontal (H) and vertical (V), one standard deviation: from PQTMEPE, or from GST when EPE is missing. RTK fixed is typically 1-2 cm, RTK float decimetres, Galileo HAS about 10-20 cm once converged, plain GNSS 1-3 m.",
+  "Galileo HAS":"Status of the receiver's PPP engine (PQTMPPPNAV): converging or converged, its horizontal accuracy, the correction station (9002 = Galileo HAS) and the age of the HAS corrections. 'No PPP status' means the receiver firmware does not support PPP.",
   "HDOP":"Horizontal dilution of precision: satellite geometry. Below 1 is good; above 2 is poor.",
   "Correction age":"Seconds since the last correction used by the receiver. Normally 1-2 s; above the 'Max correction age' setting counts as a failure.",
   "Base station":"Reference station id reported by the receiver in GGA.",

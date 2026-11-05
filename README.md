@@ -187,6 +187,14 @@ The **Corrections** switch on the Home page changes the mode at once, without a 
   - Wi-Fi stays on for the web page.
   - While the HAS solution is active, GGA reports reference station 9002, and the page shows "Galileo HAS".
 
+**Accuracy and HAS status on the Home page:**
+
+- The Position tile shows the receiver's own error estimate ("Accuracy (estimated)", horizontal and vertical, from PQTMEPE or GST).
+- It also shows the Galileo HAS engine's state (PQTMPPPNAV): converging or converged, accuracy and correction age.
+- The Pico turns these three messages on at the UART at every start-up. The NMEA tab filter still decides whether they reach Bluetooth/TCP.
+
+**Receiver replies:** the Receiver tab lists the answers to commands (OK, ERROR, version), so they are not lost in the busy NMEA stream.
+
 HAS is set in the receiver with `$PQTMCFGPPP,W,2,1,120,0.10,0.15` (E6 HAS, WGS84, 120 s timeout, converged at 0.10 m horizontal and 0.15 m vertical). It is sent at every start-up and on every mode change; turning the fallback off sends `$PQTMCFGPPP,W,0`. HAS needs LG290P firmware with PPP support. If the receiver answers `$PQTMCFGPPP,ERROR`, which shows in the NMEA live view, update it with QGNSS.
 
 ## Private build with your settings built in
