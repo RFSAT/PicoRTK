@@ -2,6 +2,7 @@
 #include "web.h"
 #include "config.h"
 #include "history.h"
+#include "diag.h"
 #include "net.h"
 #include "ntrip.h"
 #include "outputs.h"
@@ -51,6 +52,7 @@ static void handleStatus()
     d["uptimeSec"] = now / 1000;
     extern const char *bootReason;
     d["lastReset"] = bootReason;
+    d["diag"] = diagText();
     d["device"] = cfg.deviceName;
     d["privateDefaults"] = configHasPrivateDefaults();
     d["mode"] = cfg.mode;

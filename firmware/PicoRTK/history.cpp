@@ -3,6 +3,7 @@
 // file reaches HIST_FILE_MAX it becomes the old one and a new file starts, so the oldest data goes first.
 #include "history.h"
 #include "shared.h"
+#include "diag.h"
 #include <LittleFS.h>
 
 static const char *F_NEW = "/hist0.bin", *F_OLD = "/hist1.bin";
@@ -62,11 +63,17 @@ void historyLoop()
     HistRec r;
     while (histToCore0.available() >= sizeof(HistRec))
     {
+        diagC0 = 81;
         histToCore0.read((uint8_t *)&r, sizeof(r));
+        diagC0 = 82;
         add(r);
+        diagC0 = 83;
     }
     if (bufN && millis() - lastFlushMs >= FLUSH_MS)
+    {
+        diagC0 = 84;
         historyFlush();
+    }
 }
 
 bool historyClear()

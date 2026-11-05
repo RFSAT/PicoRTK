@@ -2,6 +2,7 @@
 #include "config.h"
 #include "receiver.h"
 #include "shared.h"
+#include "diag.h"
 #include <Arduino.h>
 
 SpscRing<16384> rtcmToRx;
@@ -189,6 +190,7 @@ void receiverSetup1()
 
 static void handleSentence(const char *s, size_t len)
 {
+    diagC1 = 30;
     stats.nmeaGood.store(nmea.good());
     char id[NMEA_ID_MAX];
     bool send = true;
@@ -212,8 +214,11 @@ static void handleSentence(const char *s, size_t len)
     else if (nmeaSentenceId(s, len, id, sizeof(id)))
     {
         send = allowed(id);
+        diagC1 = 31;
         countType(id, send);
+        diagC1 = 32;
         parseAccuracy(s, len, id);
+        diagC1 = 33;
         if (strcmp(id, "RMC") == 0)
         {
             uint32_t d = rmcDate(s, len);
@@ -231,10 +236,13 @@ static void handleSentence(const char *s, size_t len)
             const PppNav *ppp = (sharedAcc.pppAtMs && now - sharedAcc.pppAtMs < 3000) ? &sharedAcc.ppp : nullptr;
             uint32_t lastRtcm = stats.lastRtcmToRxMs.load();
             bool rtcmActive = lastRtcm && now - lastRtcm < 10000;
+            diagC1 = 34;
             Method m = classifyMethod(g, ppp, rtcmActive);
             float eh, ev;
             estimateFor(m, now, eh, ev);
+            diagC1 = 35;
             mutex_enter_blocking(&ggaMutex);
+            diagC1 = 36;
             memcpy(sharedGga.sentence, s, len);
             sharedGga.sentence[len] = 0;
             sharedGga.len = len;
@@ -244,8 +252,10 @@ static void handleSentence(const char *s, size_t len)
             holding = tracker.holding();
             const MethodStat &ms = tracker.stat(methodGroup(m) >= 0 ? methodGroup(m) : 0);
             mutex_exit(&ggaMutex);
+            diagC1 = 37;
             if (sample)
             {
+                diagC1 = 38;
                 HistRec r{};
                 r.ymd = rmcYmd;
                 r.utcMs = ggaTimeMs(g.utc);
@@ -262,9 +272,11 @@ static void handleSentence(const char *s, size_t len)
                 r.sats = g.sats > 255 ? 255 : g.sats;
                 r.hold = holding;
                 histToCore0.write((const uint8_t *)&r, sizeof(r)); // dropped if core 0 is stuck
+                diagC1 = 39;
             }
         }
     }
+    diagC1 = 40;
     if (send)
     {
         // Static-demo hold: the apps get the last SBAS position while HAS is still worse
@@ -298,9 +310,11 @@ void receiverLoop1()
         stats.uartRxBytes += n;
         if (cfg.usb && Serial && Serial.availableForWrite() >= n)
             Serial.write(buf, n);
+        diagC1 = 20;
         for (int i = 0; i < n; i++)
             if (nmea.feed(buf[i]))
                 handleSentence(nmea.sentence(), nmea.length());
+        diagC1 = 21;
         stats.nmeaBad.store(nmea.bad());
     }
 

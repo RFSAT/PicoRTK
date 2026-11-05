@@ -18,6 +18,7 @@
 #include "web.h"
 #include <LittleFS.h>
 #include "history.h"
+#include "diag.h"
 #include <WiFi.h>
 #include <hardware/gpio.h>
 #include <hardware/watchdog.h>
@@ -113,14 +114,19 @@ void setup()
     for (uint32_t t = millis(); !Serial && millis() - t < 1500;)
         delay(10);
     bootReason = resetReasonName();
+    diagBoot();
     dbg("\r\n[boot] PicoRTK %s, last reset: %s\r\n", PICORTK_VERSION, bootReason);
+    diagC0 = 101;
     receiverInitShared();
+    diagC0 = 102;
     if (!LittleFS.begin())
     {
         LittleFS.format();
         LittleFS.begin();
     }
+    diagC0 = 103;
     configLoad();
+    diagC0 = 104;
     {
         RefPoint r; // the reference point is part of the settings
         r.set = cfg.refSet;
@@ -129,19 +135,27 @@ void setup()
         r.alt = cfg.refAlt;
         setRefPoint(r);
     }
+    diagC0 = 105;
     historySetup();
+    diagC0 = 106;
     dbg("[boot] settings loaded, Bluetooth %s\r\n", cfg.bt.c_str());
     configReady = true; // core 1 may start the UART now
     core0Beat = millis();
     watchdog_enable(WDT_MS, true); // fed by core 1 (see loop1)
     wdtArmed = true;
 
+    diagC0 = 107;
     statusSetup();
+    diagC0 = 108;
     outputsSetup();
+    diagC0 = 109;
     dbg("[boot] Bluetooth started as %s\r\n", outputsBtName().c_str());
     netSetup();
+    diagC0 = 110;
     webSetup();
+    diagC0 = 111;
     ntripSetup();
+    diagC0 = 112;
     bootCmdsAt = millis() + 3000; // let the receiver boot first
 }
 
@@ -204,15 +218,30 @@ static void sendBootCommands()
 void loop()
 {
     core0Beat = millis();
+    diagC0 = 1;
     netLoop();
+    diagC0 = 2;
     bool up = netUp();
     outputsNetworkUp(up);
+    diagC0 = 3;
     webLoop();
+    diagC0 = 4;
     ntripLoop(up);
+    diagC0 = 5;
     outputsLoop(ntripStreaming());
+    diagC0 = 6;
     statusLoop();
     logStatus();
+    diagC0 = 8;
     historyLoop();
+    diagC0 = 9;
+    // Fault finding: repeat the previous run's record on USB for the first 2 minutes
+    static uint32_t lastDiag = 0;
+    if (millis() < 120000 && millis() - lastDiag > 3000)
+    {
+        lastDiag = millis();
+        Serial.printf("\r\n[diag %s] %s | now c1=%lu\r\n", PICORTK_VERSION, diagText().c_str(), (unsigned long)diagC1);
+    }
     if (bootCmdsAt && (int32_t)(millis() - bootCmdsAt) > 0)
     {
         bootCmdsAt = 0;
@@ -224,7 +253,9 @@ void setup1() { receiverSetup1(); }
 
 void loop1()
 {
+    diagC1 = 1;
     receiverLoop1();
+    diagC1 = 0;
     if (wdtArmed && millis() - core0Beat.load() < CORE0_STALL_MS)
         watchdog_update();
 }
