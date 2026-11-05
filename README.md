@@ -207,6 +207,15 @@ The LG290P computes **one** position at a time. It cannot run SBAS and Galileo H
 - **Trace:** the last 30 minutes, one sample every 10 s, estimate (solid) and actual error (dashed) on a background coloured by method (`GET /api/trace`).
 - **Static-demo hold** (off by default, `POST /api/hold` with `on` / `off`): while HAS is converging and its estimate is worse than the last SBAS fix, the Bluetooth and TCP outputs carry that last SBAS position in GGA, RMC, GLL and GNS (GGA quality 2, no station). It releases as soon as HAS is as good as SBAS (or converged) and never holds a position older than 30 minutes. The page says "Apps receive: the held SBAS position ..." while it holds. Proprietary PQTM messages are passed unchanged, and USB always carries the receiver's raw stream. **Only for an antenna that does not move.**
 
+### History in flash
+
+The Methods tab also keeps a **history**: one record every 10 s with the UTC date and time, uptime, method, estimated and actual error, position, satellites, HDOP, and whether the apps got a held SBAS position.
+
+- Stored in the Pico's flash (`/hist0.bin`, `/hist1.bin`, 56 bytes a record, up to 768 KB, about 39 hours). When full, the oldest records go first.
+- Written every 5 minutes and at *Shut down* / restart from the page, so pulling the power loses at most the last 5 minutes. Each start-up adds a `restart` line.
+- **Download CSV** (`GET /api/history.csv`) sends everything, oldest first. While it is sent (a few seconds), the correction stream and Bluetooth/TCP pause. **Clear history** (`POST /api/history/clear`) deletes it. `GET /api/history` returns the record count and time span.
+- Flashing a new UF2 keeps the history, like the settings.
+
 ## Private build with your settings built in
 
 A Pico flashed with a private build starts with your Wi-Fi networks, caster logins and bench position, and does not need the setup access point. Its web page shows "(private build)" next to the version.

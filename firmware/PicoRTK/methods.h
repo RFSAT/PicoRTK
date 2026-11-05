@@ -72,7 +72,8 @@ class MethodTracker
 {
   public:
     // One epoch (per GGA). estH/estV = receiver estimate (-1 none). holdWanted = static-demo hold enabled.
-    void update(uint32_t nowMs, const GgaInfo &g, Method m, float estH, float estV, const RefPoint &ref, bool holdWanted);
+    // Returns true when this epoch was added to the trace (one every 10 s): also the moment to log it.
+    bool update(uint32_t nowMs, const GgaInfo &g, Method m, float estH, float estV, const RefPoint &ref, bool holdWanted);
 
     Method current() const { return _cur; }
     uint32_t currentSinceMs() const { return _curSince; }
@@ -114,6 +115,27 @@ class MethodTracker
     float _trEst = -1, _trErr = -1; // worst values since the last sample
     uint8_t _trMethod = M_NONE;
 };
+
+// One history record (kept in flash across restarts), written every 10 s
+struct HistRec
+{
+    double lat, lon;   // first, so the record packs to 56 bytes
+    uint32_t ymd;      // UTC date as yyyymmdd from RMC, 0 = not known yet; 0xFFFFFFFF = restart marker
+    uint32_t utcMs;    // UTC time of day (ms) from GGA
+    uint32_t upSec;    // uptime
+    float estH, estV, errH, errV; // -1 = none
+    float alt, hdop;
+    uint8_t method, sats, hold, flags;
+};
+static const uint32_t HIST_RESTART = 0xFFFFFFFFu;
+static const char HIST_CSV_HEADER[] =
+    "date_utc,time_utc,uptime_s,method,est_h_m,est_v_m,err_h_m,err_v_m,lat_deg,lon_deg,alt_msl_m,sats,hdop,apps_get_held_sbas\r\n";
+// One CSV line for a record. Returns its length.
+size_t histCsvLine(const HistRec &r, char *out, size_t outSize);
+// RMC date field ddmmyy -> yyyymmdd (0 when missing)
+uint32_t rmcDate(const char *s, size_t len);
+// GGA time hhmmss.ss -> ms of day (0 when missing)
+uint32_t ggaTimeMs(const char *utc);
 
 // Rewrite the position in a GGA, RMC, GLL or GNS sentence with a held position.
 // GGA/GNS also get the altitude, quality 2 (SBAS) and empty correction age / station.

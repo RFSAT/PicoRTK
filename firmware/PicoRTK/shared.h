@@ -64,6 +64,8 @@ void getAccuracy(SharedAccuracy &out);
 // Positioning methods seen over time, reference point and static-demo hold (core 1 writes, core 0 reads)
 #include "methods.h"
 void getMethods(MethodTracker &out, RefPoint &ref);
+// core 1 -> core 0: one HistRec every 10 s for the flash history
+extern SpscRing<8192> histToCore0;
 void setRefPoint(const RefPoint &r); // also call configSave() after updating cfg
 
 // Copy the latest GGA (thread-safe). Returns false when none has arrived yet.

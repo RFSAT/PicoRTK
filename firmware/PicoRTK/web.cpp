@@ -1,6 +1,7 @@
 // web.cpp - core 0: configuration page and JSON API (HTTP Basic login "admin" / adminPass)
 #include "web.h"
 #include "config.h"
+#include "history.h"
 #include "net.h"
 #include "ntrip.h"
 #include "outputs.h"
@@ -414,6 +415,70 @@ void webSetup()
         js += "]}";
         server.sendHeader("Cache-Control", "no-store");
         server.send(200, "application/json", js);
+    });
+    // Positioning history kept in flash across restarts
+    server.on("/api/history", HTTP_GET, []() {
+        if (!auth())
+            return;
+        uint32_t fy, fm, ly, lm;
+        historyInfo(fy, fm, ly, lm);
+        JsonDocument d;
+        d["records"] = historyRecords();
+        d["bytes"] = historyBytes();
+        d["capacityRecords"] = 2 * HIST_FILE_MAX / sizeof(HistRec);
+        d["stepSec"] = TRACE_STEP_MS / 1000;
+        d["firstYmd"] = fy;
+        d["firstMs"] = fm;
+        d["lastYmd"] = ly;
+        d["lastMs"] = lm;
+        String js;
+        serializeJson(d, js);
+        server.sendHeader("Cache-Control", "no-store");
+        server.send(200, "application/json", js);
+    });
+    server.on("/api/history.csv", HTTP_GET, []() {
+        if (!auth())
+            return;
+        historyFlush();
+        uint32_t fy, fm, ly, lm;
+        historyInfo(fy, fm, ly, lm);
+        char name[64];
+        snprintf(name, sizeof(name), "attachment; filename=\"picortk-history-%lu.csv\"", (unsigned long)(ly ? ly : 0));
+        server.sendHeader("Content-Disposition", name);
+        server.sendHeader("Cache-Control", "no-store");
+        server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+        server.send(200, "text/csv", "");
+        struct Ctx
+        {
+            String chunk;
+        } ctx;
+        ctx.chunk.reserve(1600);
+        ctx.chunk = HIST_CSV_HEADER;
+        historyForEach(
+            [](const HistRec &r, void *c) -> bool {
+                Ctx *x = (Ctx *)c;
+                char line[200];
+                size_t n = histCsvLine(r, line, sizeof(line));
+                x->chunk.concat(line, n);
+                if (x->chunk.length() > 1400)
+                {
+                    extern std::atomic<uint32_t> core0Beat;
+                    core0Beat = millis(); // a long download must not look like a stalled core 0
+                    server.sendContent(x->chunk);
+                    x->chunk = "";
+                }
+                return server.client().connected();
+            },
+            &ctx);
+        if (ctx.chunk.length())
+            server.sendContent(ctx.chunk);
+        server.sendContent("");
+    });
+    server.on("/api/history/clear", HTTP_POST, []() {
+        if (!auth())
+            return;
+        bool ok = historyClear();
+        server.send(ok ? 200 : 500, "text/plain", ok ? "History cleared." : "Could not delete the history files");
     });
     server.on("/api/factory", HTTP_POST, []() {
         if (!auth())

@@ -37,6 +37,7 @@ textarea{min-height:80px}
 :focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .btn{font:500 14px var(--sans);border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:4px;padding:6px 12px;cursor:pointer}
 .btn:disabled{opacity:.5;cursor:not-allowed}
+a.btn{text-decoration:none;display:inline-block}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on)}
 .row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:14px}
@@ -78,7 +79,7 @@ pre{margin:0;background:var(--code);color:var(--codeink);font:12.5px/1.5 var(--m
 .methbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin-top:8px}
 .outline{margin:8px 0 0;font-size:13px}
 .outline.hold{color:var(--warn);font-weight:600}
-#trace{width:100%;height:clamp(150px,32vh,320px);display:block;margin-top:8px}
+#trace{width:100%;height:clamp(150px,24vh,300px);display:block;margin-top:8px}
 #trace text{font:11px var(--sans);fill:var(--muted)}
 .tw{overflow-x:auto}
 .modebar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
@@ -181,6 +182,16 @@ Dublin, Ireland · Athens, Greece<br>
 </div>
 <svg id="trace" role="img" aria-label="Accuracy over the last 30 minutes"></svg>
 <p class="hint" id="traceNote" style="margin:4px 0 0">Last 30 minutes, one point every 10 s: solid = receiver estimate, dashed = actual error (with a reference point). Background colour = method.</p>
+</section>
+<section>
+<h2>History</h2>
+<p class="hint">One record every 10 s (method, estimate, actual error, position, satellites, HDOP, whether the apps got a held SBAS position), kept in the Pico's flash across restarts and power cuts. It is written to flash every 5 minutes and when you shut down or restart from this page, so pulling the power loses at most the last 5 minutes. When full, the oldest records go first.</p>
+<dl class="kv" id="histInfo"></dl>
+<div class="methbar">
+<a class="btn primary" id="histDl" href="/api/history.csv" download data-help="Downloads the whole history as a CSV file (UTC date and time, uptime, method, estimated and actual error in metres, latitude, longitude, altitude, satellites, HDOP, held SBAS). Restarts appear as 'restart' lines. While the file is sent, the correction stream and the Bluetooth/TCP links pause for a few seconds.">Download CSV</a>
+<button type="button" class="btn" id="histClear">Clear history</button>
+<span class="hint" id="histNote" style="margin:0"></span>
+</div>
 </section>
 </div>
 <div data-page="corr" hidden>
@@ -309,7 +320,7 @@ document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
 document.querySelectorAll("nav button").forEach(x=>x.setAttribute("aria-selected",x===b));
 document.querySelectorAll("[data-page]").forEach(p=>p.hidden=p.dataset.page!==b.dataset.tab);
 $("saveBar").hidden=!["corr","net","rx","nmea"].includes(b.dataset.tab);
-if(b.dataset.tab==="methods") drawTrace();
+if(b.dataset.tab==="methods"){drawTrace();histInfo()}
 rxVisible=b.dataset.tab==="rx"; if(rxVisible) repliesPoll();
 nmeaVisible=b.dataset.tab==="nmea"; if(nmeaVisible){nmeaPoll(); if(!readFixRate.done){readFixRate.done=1;readFixRate()}}
 });
@@ -575,7 +586,7 @@ if(cfg){cfg.corrections=cfg.corrections||{};cfg.corrections.holdSbas=!!H.enabled
 $("refNote").textContent=refMsg||(M.ref.set?`Reference: ${M.ref.lat}, ${M.ref.lon}, ${(+M.ref.alt).toFixed(3)} m`:"No reference point: actual errors are not shown.");
 $("refSet").disabled=M.currentCode!==5;
 $("refSet").title=M.currentCode===5?"":"Needs RTK fixed (now: "+M.current+")";
-if(!$("trace").closest("[data-page]").hidden&&Date.now()-lastTrace>10000){lastTrace=Date.now();drawTrace()}
+if(!$("trace").closest("[data-page]").hidden){if(Date.now()-lastTrace>10000){lastTrace=Date.now();drawTrace()}if(Date.now()-histAt>30000)histInfo()}
 }
 async function drawTrace(){
 let d; try{d=await (await fetch("/api/trace")).json()}catch(e){return}
@@ -594,6 +605,18 @@ svg.setAttribute("viewBox",`0 0 ${W} ${Hh}`);svg.innerHTML=g;
 const seen=[...new Set(sm.map(p=>p[1]))];$("traceNote").innerHTML="Last 30 minutes, one point every 10 s: solid line = receiver estimate, dashed = actual error (needs a reference point). Background: "+seen.map(m=>`<span style="color:${METHCOL[m]}">■</span> ${METHNAME[m]}`).join(" · ");
 }
 let refMsg="", holdMsg="";
+const ymdS=(y,ms)=>y?`${String(y).slice(0,4)}-${String(y).slice(4,6)}-${String(y).slice(6,8)} ${new Date(ms).toISOString().slice(11,19)} UTC`:"–";
+let histAt=0;
+async function histInfo(){
+histAt=Date.now();
+try{const h=await (await fetch("/api/history")).json();
+const hrs=h.records*h.stepSec/3600, cap=h.capacityRecords*h.stepSec/3600;
+kv($("histInfo"),[["Records",`${h.records} (about ${hrs<1?Math.round(hrs*60)+" min":hrs.toFixed(1)+" h"})`],["From",ymdS(h.firstYmd,h.firstMs)],["To",ymdS(h.lastYmd,h.lastMs)],
+["Space used",`${(h.bytes/1024).toFixed(0)} KB of ${(h.capacityRecords*56/1024).toFixed(0)} KB · keeps about ${cap.toFixed(0)} h`]]);
+}catch(e){}
+}
+$("histClear").onclick=async()=>{if(!confirm("Delete the whole positioning history from the Pico? Download it first if you need it."))return;
+const r=await fetch("/api/history/clear",{method:"POST"});$("histNote").textContent=await r.text();histInfo();setTimeout(()=>$("histNote").textContent="",8000)};
 addEventListener("resize",()=>{clearTimeout(drawTrace.t);drawTrace.t=setTimeout(drawTrace,300)});
 $("refSet").onclick=async()=>{const r=await fetch("/api/ref",{method:"POST",body:"set"});refMsg=(r.ok?"":"Not set: ")+await r.text();await status();setTimeout(()=>refMsg="",8000)};
 $("refClear").onclick=async()=>{if(!confirm("Clear the reference point? Actual errors are no longer shown."))return;const r=await fetch("/api/ref",{method:"POST",body:"clear"});refMsg=await r.text();await status();setTimeout(()=>refMsg="",8000)};

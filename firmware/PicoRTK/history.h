@@ -1,0 +1,15 @@
+// history.h - core 0: positioning history in flash (/hist0.bin, /hist1.bin), kept across restarts
+#pragma once
+#include "methods.h"
+#include <Arduino.h>
+
+void historySetup();              // after LittleFS.begin(); writes a restart marker
+void historyLoop();               // drains core 1's records, appends to flash every 5 min
+void historyFlush();              // write what is buffered now (shutdown, restart, download)
+bool historyClear();
+uint32_t historyRecords();        // in flash + buffered
+uint32_t historyBytes();
+void historyInfo(uint32_t &firstYmd, uint32_t &firstMs, uint32_t &lastYmd, uint32_t &lastMs);
+// Stream every record, oldest first; return false from the callback to stop
+void historyForEach(bool (*fn)(const HistRec &, void *), void *ctx);
+static const uint32_t HIST_FILE_MAX = 384u * 1024u; // two files: about 39 h at one record every 10 s

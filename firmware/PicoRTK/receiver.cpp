@@ -7,6 +7,8 @@
 SpscRing<16384> rtcmToRx;
 SpscRing<1024> cmdToRx;
 SpscRing<16384> nmeaToNet;
+SpscRing<8192> histToCore0;
+static uint32_t rmcYmd = 0; // UTC date from the latest RMC
 SharedGga sharedGga;
 static SharedAccuracy sharedAcc;
 static MethodTracker tracker; // under ggaMutex
@@ -170,10 +172,6 @@ void receiverInitShared()
     mutex_init(&ggaMutex);
     mutex_init(&typesMutex);
     sharedGga.len = 0;
-    refPoint.set = cfg.refSet;
-    refPoint.lat = cfg.refLat;
-    refPoint.lon = cfg.refLon;
-    refPoint.alt = cfg.refAlt;
 }
 
 void receiverSetup1()
@@ -216,6 +214,12 @@ static void handleSentence(const char *s, size_t len)
         send = allowed(id);
         countType(id, send);
         parseAccuracy(s, len, id);
+        if (strcmp(id, "RMC") == 0)
+        {
+            uint32_t d = rmcDate(s, len);
+            if (d)
+                rmcYmd = d;
+        }
     }
     static bool holding = false;
     if (nmeaIsGga(s, len))
@@ -236,9 +240,29 @@ static void handleSentence(const char *s, size_t len)
             sharedGga.len = len;
             sharedGga.info = g;
             sharedGga.atMs = now;
-            tracker.update(now, g, m, eh, ev, refPoint, cfg.holdSbas);
+            bool sample = tracker.update(now, g, m, eh, ev, refPoint, cfg.holdSbas);
             holding = tracker.holding();
+            const MethodStat &ms = tracker.stat(methodGroup(m) >= 0 ? methodGroup(m) : 0);
             mutex_exit(&ggaMutex);
+            if (sample)
+            {
+                HistRec r{};
+                r.ymd = rmcYmd;
+                r.utcMs = ggaTimeMs(g.utc);
+                r.upSec = now / 1000;
+                r.estH = eh;
+                r.estV = ev;
+                r.errH = methodGroup(m) >= 0 ? ms.errH : -1;
+                r.errV = methodGroup(m) >= 0 ? ms.errV : -1;
+                r.lat = g.lat;
+                r.lon = g.lon;
+                r.alt = g.alt;
+                r.hdop = g.hdop;
+                r.method = m;
+                r.sats = g.sats > 255 ? 255 : g.sats;
+                r.hold = holding;
+                histToCore0.write((const uint8_t *)&r, sizeof(r)); // dropped if core 0 is stuck
+            }
         }
     }
     if (send)

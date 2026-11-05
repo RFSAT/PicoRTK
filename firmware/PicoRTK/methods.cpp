@@ -2,6 +2,7 @@
 #include "methods.h"
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 const char *methodName(Method m)
@@ -86,7 +87,7 @@ void refError(const RefPoint &r, double lat, double lon, float alt, float &errH,
     errV = fabsf(alt - r.alt);
 }
 
-void MethodTracker::update(uint32_t now, const GgaInfo &g, Method m, float estH, float estV, const RefPoint &ref, bool holdWanted)
+bool MethodTracker::update(uint32_t now, const GgaInfo &g, Method m, float estH, float estV, const RefPoint &ref, bool holdWanted)
 {
     if (m != _cur)
     {
@@ -169,7 +170,70 @@ void MethodTracker::update(uint32_t now, const GgaInfo &g, Method m, float estH,
         _traceHead = (_traceHead + 1) % TRACE_N;
         if (_traceN < TRACE_N)
             _traceN++;
+        return true;
     }
+    return false;
+}
+
+static void numOrEmpty(char *o, size_t n, float v, int dec)
+{
+    if (v < 0)
+        o[0] = 0;
+    else
+        snprintf(o, n, "%.*f", dec, v);
+}
+
+size_t histCsvLine(const HistRec &r, char *out, size_t n)
+{
+    if (r.ymd == HIST_RESTART)
+        return (size_t)snprintf(out, n, ",,%lu,restart,,,,,,,,,,\r\n", (unsigned long)r.upSec);
+    char d[16] = "", t[16] = "", a[4][16];
+    if (r.ymd)
+        snprintf(d, sizeof(d), "%04lu-%02lu-%02lu", (unsigned long)(r.ymd / 10000), (unsigned long)(r.ymd / 100 % 100), (unsigned long)(r.ymd % 100));
+    unsigned long ms = r.utcMs;
+    snprintf(t, sizeof(t), "%02lu:%02lu:%02lu.%01lu", ms / 3600000, ms / 60000 % 60, ms / 1000 % 60, ms / 100 % 10);
+    numOrEmpty(a[0], 16, r.estH, 3);
+    numOrEmpty(a[1], 16, r.estV, 3);
+    numOrEmpty(a[2], 16, r.errH, 3);
+    numOrEmpty(a[3], 16, r.errV, 3);
+    const bool pos = r.method != M_NONE;
+    char la[20] = "", lo[20] = "", al[16] = "";
+    if (pos)
+    {
+        snprintf(la, sizeof(la), "%.9f", r.lat);
+        snprintf(lo, sizeof(lo), "%.9f", r.lon);
+        snprintf(al, sizeof(al), "%.3f", r.alt);
+    }
+    return (size_t)snprintf(out, n, "%s,%s,%lu,%s,%s,%s,%s,%s,%s,%s,%s,%u,%.2f,%s\r\n", d, t, (unsigned long)r.upSec,
+                            methodName((Method)r.method), a[0], a[1], a[2], a[3], la, lo, al, r.sats, r.hdop, r.hold ? "yes" : "no");
+}
+
+uint32_t rmcDate(const char *s, size_t len)
+{
+    // field 9 of $xxRMC
+    int f = 0;
+    size_t i = 0;
+    for (; i < len && f < 9; i++)
+        if (s[i] == ',')
+            f++;
+    if (f < 9 || i + 6 > len)
+        return 0;
+    for (int k = 0; k < 6; k++)
+        if (s[i + k] < '0' || s[i + k] > '9')
+            return 0;
+    auto two = [&](int k) { return (uint32_t)((s[i + k] - '0') * 10 + (s[i + k + 1] - '0')); };
+    return (2000 + two(4)) * 10000 + two(2) * 100 + two(0);
+}
+
+uint32_t ggaTimeMs(const char *u)
+{
+    if (strlen(u) < 6)
+        return 0;
+    auto two = [&](int k) { return (uint32_t)((u[k] - '0') * 10 + (u[k + 1] - '0')); };
+    uint32_t ms = (two(0) * 3600 + two(2) * 60 + two(4)) * 1000;
+    if (u[6] == '.')
+        ms += (uint32_t)(atof(u + 6) * 1000 + 0.5);
+    return ms;
 }
 
 const TraceSample &MethodTracker::trace(int i) const

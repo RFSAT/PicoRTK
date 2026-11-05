@@ -17,6 +17,7 @@
 #include "util.h"
 #include "web.h"
 #include <LittleFS.h>
+#include "history.h"
 #include <WiFi.h>
 #include <hardware/gpio.h>
 #include <hardware/watchdog.h>
@@ -51,6 +52,7 @@ static const uint32_t CORE0_STALL_MS = 60000;  // longest blocking call on core 
 
 void safeReboot()
 {
+    historyFlush(); // keep the last minutes of history
     // Safety net first: whatever happens below, the watchdog resets the chip within 3 s
     wdtArmed = false;
     watchdog_enable(3000, true);
@@ -69,6 +71,7 @@ void safeReboot()
 void safeShutdown()
 {
     dbg("[boot] shutting down\r\n");
+    historyFlush();
     ntripStop();
     outputsStop();
     core1Halt = true;      // core 1 stops using the UART and USB
@@ -118,6 +121,15 @@ void setup()
         LittleFS.begin();
     }
     configLoad();
+    {
+        RefPoint r; // the reference point is part of the settings
+        r.set = cfg.refSet;
+        r.lat = cfg.refLat;
+        r.lon = cfg.refLon;
+        r.alt = cfg.refAlt;
+        setRefPoint(r);
+    }
+    historySetup();
     dbg("[boot] settings loaded, Bluetooth %s\r\n", cfg.bt.c_str());
     configReady = true; // core 1 may start the UART now
     core0Beat = millis();
@@ -200,6 +212,7 @@ void loop()
     outputsLoop(ntripStreaming());
     statusLoop();
     logStatus();
+    historyLoop();
     if (bootCmdsAt && (int32_t)(millis() - bootCmdsAt) > 0)
     {
         bootCmdsAt = 0;

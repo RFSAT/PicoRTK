@@ -384,8 +384,35 @@ static void testMethods()
     CHECK(nmeaReplacePosition(gsa.c_str(), gsa.size(), 1, 1, 1, out, sizeof(out)) == 0);
 }
 
+static void testHistory()
+{
+    std::string rmc = withChecksum("$GNRMC,120000.00,A,3758.1234567,N,02343.5678901,E,0.01,0.0,051126,,,R,V");
+    CHECK(rmcDate(rmc.c_str(), rmc.size()) == 20261105);
+    std::string rmc0 = withChecksum("$GNRMC,,V,,,,,,,,,,N,V");
+    CHECK(rmcDate(rmc0.c_str(), rmc0.size()) == 0);
+    CHECK(ggaTimeMs("120000.50") == 43200500);
+    CHECK(ggaTimeMs("") == 0);
+    HistRec r{};
+    r.ymd = 20261105; r.utcMs = 43200500; r.upSec = 1234; r.estH = 0.67f; r.estV = 1.0f; r.errH = -1; r.errV = -1;
+    r.lat = 37.9; r.lon = -23.7; r.alt = 280.5f; r.hdop = 0.6f; r.method = M_SBAS; r.sats = 30; r.hold = 0;
+    char line[200];
+    histCsvLine(r, line, sizeof(line));
+    CHECK(std::string(line) == "2026-11-05,12:00:00.5,1234,SBAS (EGNOS),0.670,1.000,,,37.900000000,-23.700000000,280.500,30,0.60,no\r\n");
+    HistRec b{}; b.ymd = HIST_RESTART; b.upSec = 2;
+    histCsvLine(b, line, sizeof(line));
+    CHECK(std::string(line) == ",,2,restart,,,,,,,,,,\r\n");
+    // header and lines have the same number of columns
+    int ch = 0, cl = 0;
+    for (const char *p = HIST_CSV_HEADER; *p; p++) ch += *p == ',';
+    histCsvLine(r, line, sizeof(line));
+    for (const char *p = line; *p; p++) cl += *p == ',';
+    CHECK(ch == cl && ch == 13);
+    CHECK(sizeof(HistRec) == 56);
+}
+
 int main()
 {
+    testHistory();
     testMethods();
     testNmea();
     testRtcm();
