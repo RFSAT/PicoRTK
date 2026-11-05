@@ -2,7 +2,7 @@
 
 Two printed parts: `picortk_case_base.stl` and `picortk_case_lid.stl`. Both are generated from the parametric `picortk_case.scad` (OpenSCAD 2021 or later).
 
-**Outside size:** 56 × 45 × 19.5 mm (base 17.5 mm high, lid 2 mm).
+**Outside size:** 56 × 44 × 19.5 mm (base 17.5 mm high, lid 2 mm).
 
 ## Layout (mm, floor top = 0)
 
@@ -14,7 +14,7 @@ Two printed parts: `picortk_case_base.stl` and `picortk_case_lid.stl`. Both are 
 | Pico PCB (1 mm) to the underside of the lid | 4.5 mm (4 mm + 0.5 mm margin) |
 
 - Both boards are flush at the Pico's USB end and centred across.
-- The GNSS board is 4 mm from the front wall (for the UART cable plug) and 4 mm from the back wall, so the boards and the micro-USB slot are centred on the case.
+- The GNSS board is 3.5 mm from the front wall (UART cable plug, USB-C) and 3.5 mm from the back wall, so the boards and the micro-USB slot are centred on the case.
 - At the SMA, the back wall steps in to the connector's flange over 12 mm, so about 6 mm of thread still sticks out.
 
 ## Openings
@@ -48,7 +48,7 @@ To use M2 heat-set inserts instead, set `col_pilot = 3.2`.
 
 - **Base:** print floor down.
 - **Lid:** printed top face down (the STL is already oriented).
-- **Settings:** 0.2 mm layers, 3 walls, PETG or PLA. No supports needed. The one boss hung from the back wall has a 45° cone under it.
+- **Settings:** 0.2 mm layers, 3 walls, PETG or PLA. No supports needed: the back-left lid boss hangs from the wall above the GNSS board on a 45° cone. The one boss hung from the back wall has a 45° cone under it.
 
 ## Assembly
 

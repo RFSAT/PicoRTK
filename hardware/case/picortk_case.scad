@@ -31,7 +31,7 @@ pico_stand = 10;     // column height under the Pico (two columns, antenna end)
 above_pico = 4.5;    // clearance between the Pico PCB top and the lid (4 mm + 0.5 mm margin)
 
 /* [Clearances to the walls] */
-cable_gap  = 4;      // UART socket edge of the GNSS board to the inside of the front wall
+cable_gap  = 3.5;    // GNSS board edge to the inside of the front wall (UART and USB-C side); the back wall uses the same gap, so the boards stay centred
 side_gap   = 0.5;    // other board edges to the walls
 sma_flange = 1.9;    // the SMA's square flange sticks out this far beyond the GNSS board edge
 
@@ -75,9 +75,13 @@ rst      = [33 - 28.4, gnss_y0 + 9.6];     // LG290P RST button, mirrored becaus
 bootsel_top = pico_top + 1.4;              // button cap height
 rst_tip     = gnss_stand - 1.4;            // button points down
 
-// lid screw bosses, all floor-standing and clear of both boards
+// lid screw bosses: three stand on the floor beside the GNSS board; the back-left one hangs from the back wall
+// above the GNSS board (it would overlap the board's back edge), clear of that corner's screw
 bi = boss_r - 0.4;   // bosses overlap the walls by 0.4 mm
-all_bosses = [[36.5, y_in0 + bi], [x_in1 - bi, y_in0 + bi], [x_in1 - bi, y_in1 - bi], [6.5, y_in1 - bi]];
+bosses_floor = [[36.5, y_in0 + bi], [x_in1 - bi, y_in0 + bi], [x_in1 - bi, y_in1 - bi]];
+boss_corbel  = [6.5, y_in1 - bi];
+corbel_z0    = gnss_top + boss_r + 0.5;   // its 45-degree support cone ends 0.5 mm above the GNSS board
+all_bosses   = concat(bosses_floor, [boss_corbel]);
 
 module rrect(x0, x1, y0, y1, r) { // rounded rectangle in the xy plane
   hull() for (x = [x0 + r, x1 - r], y = [y0 + r, y1 - r]) translate([x, y]) circle(r = r);
@@ -102,7 +106,11 @@ module base() {
         cylinder(d1 = col_d_pico + 2, d2 = col_d_pico, h = 1);
       }
       // lid screw bosses
-      for (b = all_bosses) translate([b[0], b[1], 0]) cylinder(r = boss_r, h = z_in1);
+      for (b = bosses_floor) translate([b[0], b[1], 0]) cylinder(r = boss_r, h = z_in1);
+      translate([boss_corbel[0], boss_corbel[1], corbel_z0]) {
+        cylinder(r = boss_r, h = z_in1 - corbel_z0);
+        translate([0, 0, -boss_r + 0.5]) cylinder(r1 = 0.5, r2 = boss_r, h = boss_r - 0.5);
+      }
       // SMA bay: the back wall steps in to the SMA flange over sma_bay mm
       translate([sma_c[0] - sma_bay/2 - wall, sma_y0, -floor_t]) cube([sma_bay + 2*wall, y_in1 - sma_y0 + 0.5, z_in1 + floor_t]);
     }
