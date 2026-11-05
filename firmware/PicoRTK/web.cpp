@@ -107,6 +107,54 @@ static void handleStatus()
         p["sats"] = a.ppp.satUsed;
     }
 
+    // Methods over time (the receiver computes one at a time), reference point, static-demo hold
+    {
+        static MethodTracker mt; // large: keep it off the stack
+        RefPoint rp;
+        getMethods(mt, rp);
+        JsonObject m = d["methods"].to<JsonObject>();
+        m["current"] = methodName(mt.current());
+        m["currentCode"] = (int)mt.current();
+        m["currentForSec"] = (now - mt.currentSinceMs()) / 1000;
+        int curGrp = methodGroup(mt.current());
+        JsonArray ga = m["groups"].to<JsonArray>();
+        for (int i = 0; i < G_COUNT; i++)
+        {
+            const MethodStat &st = mt.stat(i);
+            JsonObject o = ga.add<JsonObject>();
+            o["name"] = groupName((MethodGroup)i);
+            o["seen"] = st.seen;
+            if (!st.seen)
+                continue;
+            o["running"] = i == curGrp && now - st.lastMs < 5000;
+            o["last"] = methodName(st.last);
+            o["runSec"] = (st.lastMs - st.startMs) / 1000;
+            o["endedAgoSec"] = (now - st.lastMs) / 1000;
+            if (st.estH >= 0) o["estH"] = st.estH;
+            if (st.estV >= 0) o["estV"] = st.estV;
+            if (st.errH >= 0) o["errH"] = st.errH;
+            if (st.errV >= 0) o["errV"] = st.errV;
+            if (st.bestEstH >= 0) o["bestEstH"] = st.bestEstH;
+        }
+        JsonObject r = m["ref"].to<JsonObject>();
+        r["set"] = rp.set;
+        if (rp.set)
+        {
+            r["lat"] = serialized(String(rp.lat, 9));
+            r["lon"] = serialized(String(rp.lon, 9));
+            r["alt"] = rp.alt;
+        }
+        JsonObject h = m["hold"].to<JsonObject>();
+        h["enabled"] = cfg.holdSbas;
+        h["active"] = mt.holding();
+        h["reason"] = mt.holdReason();
+        if (mt.holdReady())
+        {
+            h["sbasAgoSec"] = (now - mt.holdFromMs()) / 1000;
+            if (mt.holdEstH() >= 0) h["sbasEstH"] = mt.holdEstH();
+        }
+    }
+
     NtripStatus s;
     ntripStatus(s);
     JsonObject t = d["ntrip"].to<JsonObject>();
@@ -273,6 +321,99 @@ void webSetup()
         sendHasCommand();
         ntripRestart();
         server.send(200, "text/plain", m == "has" ? "Galileo HAS mode: NTRIP off. Convergence takes several minutes." : "RTK mode: NTRIP corrections on.");
+    });
+    // Reference point: "set" = current position, only from an RTK fixed solution; "force" = any fix; "clear"
+    server.on("/api/ref", HTTP_POST, []() {
+        if (!auth())
+            return;
+        String a = server.arg("plain");
+        a.trim();
+        RefPoint r;
+        if (a == "set" || a == "force")
+        {
+            SharedGga g;
+            static MethodTracker mt;
+            RefPoint old;
+            getMethods(mt, old);
+            if (!getLatestGga(g) || millis() - g.atMs > 3000 || g.info.quality == 0)
+            {
+                server.send(409, "text/plain", "No current position from the receiver");
+                return;
+            }
+            if (a == "set" && mt.current() != M_RTK_FIXED)
+            {
+                server.send(409, "text/plain", "Needs an RTK fixed solution (now: " + String(methodName(mt.current())) + ")");
+                return;
+            }
+            r.set = true;
+            r.lat = g.info.lat;
+            r.lon = g.info.lon;
+            r.alt = g.info.alt;
+        }
+        else if (a != "clear")
+        {
+            server.send(400, "text/plain", "Use set, force or clear");
+            return;
+        }
+        cfg.refSet = r.set;
+        cfg.refLat = r.lat;
+        cfg.refLon = r.lon;
+        cfg.refAlt = r.alt;
+        if (!configSave())
+        {
+            server.send(500, "text/plain", "Could not write the settings to flash");
+            return;
+        }
+        setRefPoint(r);
+        server.send(200, "text/plain", r.set ? "Reference point recorded at the current position." : "Reference point cleared.");
+    });
+    // Static-demo hold of the last SBAS position: "on" / "off"
+    server.on("/api/hold", HTTP_POST, []() {
+        if (!auth())
+            return;
+        String a = server.arg("plain");
+        a.trim();
+        if (a != "on" && a != "off")
+        {
+            server.send(400, "text/plain", "Use on or off");
+            return;
+        }
+        cfg.holdSbas = a == "on";
+        if (!configSave())
+        {
+            server.send(500, "text/plain", "Could not write the settings to flash");
+            return;
+        }
+        server.send(200, "text/plain", cfg.holdSbas ? "Static-demo hold on: only for an antenna that does not move." : "Hold off.");
+    });
+    // Accuracy trace: last 30 min, one sample every 10 s: [uptime s, method code, estimate H, error H] (-1 = none)
+    server.on("/api/trace", HTTP_GET, []() {
+        if (!auth())
+            return;
+        static MethodTracker mt;
+        RefPoint rp;
+        getMethods(mt, rp);
+        String js;
+        js.reserve(TRACE_N * 28 + 64);
+        js = "{\"now\":" + String(millis() / 1000) + ",\"step\":" + String(TRACE_STEP_MS / 1000) + ",\"samples\":[";
+        for (int i = 0; i < mt.traceCount(); i++)
+        {
+            const TraceSample &t = mt.trace(i);
+            if (i)
+                js += ',';
+            js += '[';
+            js += String(t.tSec);
+            js += ',';
+            js += String(t.method);
+            js += ',';
+            js += String(t.estH, 3);
+            js += ',';
+            js += String(t.errH, 3);
+            js += ']';
+        }
+        js += "]}";
+        server.sendHeader("Cache-Control", "no-store");
+        server.send(200, "application/json", js);
     });
     server.on("/api/factory", HTTP_POST, []() {
         if (!auth())

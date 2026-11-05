@@ -197,6 +197,16 @@ The **Corrections** switch on the Home page changes the mode at once, without a 
 
 HAS is set in the receiver with `$PQTMCFGPPP,W,2,1,120,0.10,0.15` (E6 HAS, WGS84, 120 s timeout, converged at 0.10 m horizontal and 0.15 m vertical). It is sent at every start-up and on every mode change; turning the fallback off sends `$PQTMCFGPPP,W,0`. HAS needs LG290P firmware with PPP support. If the receiver answers `$PQTMCFGPPP,ERROR`, which shows in the NMEA live view, update it with QGNSS.
 
+### Methods panel, reference point and static-demo hold
+
+The LG290P computes **one** position at a time. It cannot run SBAS and Galileo HAS side by side: once HAS corrections arrive, its GGA carries the HAS solution, converging or not (the protocol has no option to keep SBAS meanwhile). The **Methods** panel on the Home page therefore shows the methods over time:
+
+- One row per method group: RTK (RTCM), Galileo HAS, SBAS (EGNOS), GNSS only. The running one is marked ●; the others keep their last figures, with how long they ran and how long ago they stopped.
+- **Estimated H · V** is the receiver's own figure (PQTMPPPNAV for HAS, otherwise PQTMEPE or GST). **Actual error H · V** is the distance from the reference point.
+- **Reference point:** press *Set reference from RTK fix* while the receiver has RTK fixed (the button is disabled otherwise), then leave the antenna where it is. It is saved; *Clear reference* removes it. The API also accepts `force` for a point taken from any fix (`POST /api/ref` with `set`, `force` or `clear`).
+- **Trace:** the last 30 minutes, one sample every 10 s, estimate (solid) and actual error (dashed) on a background coloured by method (`GET /api/trace`).
+- **Static-demo hold** (off by default, `POST /api/hold` with `on` / `off`): while HAS is converging and its estimate is worse than the last SBAS fix, the Bluetooth and TCP outputs carry that last SBAS position in GGA, RMC, GLL and GNS (GGA quality 2, no station). It releases as soon as HAS is as good as SBAS (or converged) and never holds a position older than 30 minutes. The page says "Apps receive: the held SBAS position ..." while it holds. Proprietary PQTM messages are passed unchanged, and USB always carries the receiver's raw stream. **Only for an antenna that does not move.**
+
 ## Private build with your settings built in
 
 A Pico flashed with a private build starts with your Wi-Fi networks, caster logins and bench position, and does not need the setup access point. Its web page shows "(private build)" next to the version.

@@ -115,6 +115,12 @@ String configToJson(bool withSecrets)
     JsonObject cm = d["corrections"].to<JsonObject>();
     cm["mode"] = cfg.mode;
     cm["galileoHas"] = cfg.galileoHas;
+    cm["holdSbas"] = cfg.holdSbas;
+    JsonObject rp = d["reference"].to<JsonObject>();
+    rp["set"] = cfg.refSet;
+    rp["lat"] = serialized(String(cfg.refLat, 9));
+    rp["lon"] = serialized(String(cfg.refLon, 9));
+    rp["alt"] = cfg.refAlt;
 
     JsonObject r = d["receiver"].to<JsonObject>();
     r["uartBaud"] = cfg.uartBaud;
@@ -261,6 +267,20 @@ bool configFromJson(const String &json, String &err)
     {
         getStr(cm["mode"], c.mode);
         getNum(cm["galileoHas"], c.galileoHas);
+        getNum(cm["holdSbas"], c.holdSbas);
+    }
+    JsonVariantConst rp = d["reference"];
+    if (!rp.isNull())
+    {
+        getNum(rp["set"], c.refSet);
+        getNum(rp["lat"], c.refLat);
+        getNum(rp["lon"], c.refLon);
+        getNum(rp["alt"], c.refAlt);
+    }
+    if (c.refLat < -90 || c.refLat > 90 || c.refLon < -180 || c.refLon > 180)
+    {
+        err = "reference out of range";
+        return false;
     }
 
     JsonVariantConst r = d["receiver"];

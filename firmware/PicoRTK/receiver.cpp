@@ -9,6 +9,8 @@ SpscRing<1024> cmdToRx;
 SpscRing<16384> nmeaToNet;
 SharedGga sharedGga;
 static SharedAccuracy sharedAcc;
+static MethodTracker tracker; // under ggaMutex
+static RefPoint refPoint;     // under ggaMutex
 mutex_t ggaMutex;
 Stats stats;
 std::atomic<bool> configReady{false};
@@ -116,6 +118,45 @@ static void parseAccuracy(const char *s, size_t len, const char *id)
     }
 }
 
+void getMethods(MethodTracker &out, RefPoint &ref)
+{
+    mutex_enter_blocking(&ggaMutex);
+    out = tracker;
+    ref = refPoint;
+    mutex_exit(&ggaMutex);
+}
+
+void setRefPoint(const RefPoint &r)
+{
+    mutex_enter_blocking(&ggaMutex);
+    refPoint = r;
+    mutex_exit(&ggaMutex);
+}
+
+// Receiver's horizontal / vertical estimate for the method in use (-1 = none)
+static void estimateFor(Method m, uint32_t now, float &h, float &v)
+{
+    h = v = -1;
+    const SharedAccuracy &a = sharedAcc;
+    if ((m == M_HAS_CONV || m == M_HAS_DONE) && a.pppAtMs && now - a.pppAtMs < 3000 && a.ppp.latStd >= 0 && a.ppp.lonStd >= 0)
+    {
+        h = sqrtf(a.ppp.latStd * a.ppp.latStd + a.ppp.lonStd * a.ppp.lonStd);
+        v = a.ppp.altStd;
+        return;
+    }
+    if (a.epeAtMs && now - a.epeAtMs < 3000 && a.epe2d >= 0)
+    {
+        h = a.epe2d;
+        v = fabsf(a.epeDown);
+        return;
+    }
+    if (a.gstAtMs && now - a.gstAtMs < 3000 && a.gstLat >= 0 && a.gstLon >= 0)
+    {
+        h = sqrtf(a.gstLat * a.gstLat + a.gstLon * a.gstLon);
+        v = a.gstAlt;
+    }
+}
+
 bool getLatestGga(SharedGga &out)
 {
     mutex_enter_blocking(&ggaMutex);
@@ -129,6 +170,10 @@ void receiverInitShared()
     mutex_init(&ggaMutex);
     mutex_init(&typesMutex);
     sharedGga.len = 0;
+    refPoint.set = cfg.refSet;
+    refPoint.lat = cfg.refLat;
+    refPoint.lon = cfg.refLon;
+    refPoint.alt = cfg.refAlt;
 }
 
 void receiverSetup1()
@@ -172,21 +217,44 @@ static void handleSentence(const char *s, size_t len)
         countType(id, send);
         parseAccuracy(s, len, id);
     }
-    if (send)
-        nmeaToNet.write((const uint8_t *)s, len); // dropped if nobody drains the ring
+    static bool holding = false;
     if (nmeaIsGga(s, len))
     {
         GgaInfo g;
         if (nmeaParseGga(s, len, g))
         {
+            uint32_t now = millis();
+            const PppNav *ppp = (sharedAcc.pppAtMs && now - sharedAcc.pppAtMs < 3000) ? &sharedAcc.ppp : nullptr;
+            uint32_t lastRtcm = stats.lastRtcmToRxMs.load();
+            bool rtcmActive = lastRtcm && now - lastRtcm < 10000;
+            Method m = classifyMethod(g, ppp, rtcmActive);
+            float eh, ev;
+            estimateFor(m, now, eh, ev);
             mutex_enter_blocking(&ggaMutex);
             memcpy(sharedGga.sentence, s, len);
             sharedGga.sentence[len] = 0;
             sharedGga.len = len;
             sharedGga.info = g;
-            sharedGga.atMs = millis();
+            sharedGga.atMs = now;
+            tracker.update(now, g, m, eh, ev, refPoint, cfg.holdSbas);
+            holding = tracker.holding();
             mutex_exit(&ggaMutex);
         }
+    }
+    if (send)
+    {
+        // Static-demo hold: the apps get the last SBAS position while HAS is still worse
+        static char held[NMEA_MAX + 3];
+        size_t hn = 0;
+        if (holding)
+        {
+            MethodTracker *t = &tracker; // core 1 is the only writer, reading here is safe
+            hn = nmeaReplacePosition(s, len, t->holdLat(), t->holdLon(), t->holdAlt(), held, sizeof(held));
+        }
+        if (hn)
+            nmeaToNet.write((const uint8_t *)held, hn);
+        else
+            nmeaToNet.write((const uint8_t *)s, len); // dropped if nobody drains the ring
     }
 }
 

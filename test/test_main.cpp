@@ -1,6 +1,7 @@
 #include <cmath>
 // Host unit tests for the portable PicoRTK modules.
-// Build: g++ -std=c++17 -Wall -I../firmware/PicoRTK test_main.cpp ../firmware/PicoRTK/{nmea,rtcm,selector,ntrip_proto}.cpp -o t && ./t
+// Build: g++ -std=c++17 -Wall -I../firmware/PicoRTK test_main.cpp ../firmware/PicoRTK/{nmea,rtcm,selector,ntrip_proto,methods}.cpp -o t && ./t
+#include "methods.h"
 #include "nmea.h"
 #include "ntrip_proto.h"
 #include "ring.h"
@@ -290,8 +291,102 @@ static void testRing()
     CHECK(ring.available() == 0);
 }
 
+static GgaInfo mkGga(int q, int station, double lat = 37.9, double lon = 23.7, float alt = 280)
+{
+    GgaInfo g;
+    g.valid = true; g.quality = q; g.station = station; g.lat = lat; g.lon = lon; g.alt = alt;
+    return g;
+}
+
+static void testMethods()
+{
+    // Classification
+    PppNav p; p.sol = 6; p.diffId = 9002;
+    CHECK(classifyMethod(mkGga(2, -1), nullptr, false) == M_SBAS);
+    CHECK(classifyMethod(mkGga(2, 124), nullptr, false) == M_SBAS);   // EGNOS PRN as station
+    CHECK(classifyMethod(mkGga(2, 124), nullptr, true) == M_DGNSS);   // RTCM flowing: a real base
+    CHECK(classifyMethod(mkGga(2, 27), nullptr, false) == M_DGNSS);
+    CHECK(classifyMethod(mkGga(4, 27), nullptr, true) == M_RTK_FIXED);
+    CHECK(classifyMethod(mkGga(5, 27), nullptr, true) == M_RTK_FLOAT);
+    CHECK(classifyMethod(mkGga(5, 9002), nullptr, false) == M_HAS_CONV);
+    CHECK(classifyMethod(mkGga(2, -1), &p, false) == M_HAS_CONV);
+    p.sol = 7;
+    CHECK(classifyMethod(mkGga(5, 9002), &p, false) == M_HAS_DONE);
+    p.sol = 2;
+    CHECK(classifyMethod(mkGga(2, -1), &p, false) == M_SBAS);
+    CHECK(classifyMethod(mkGga(1, -1), nullptr, false) == M_GNSS);
+    CHECK(classifyMethod(mkGga(0, -1), nullptr, false) == M_NONE);
+
+    // Reference error: 1e-5 deg latitude = 1.113 m north
+    RefPoint r; r.set = true; r.lat = 37.9; r.lon = 23.7; r.alt = 280;
+    float eh, ev;
+    refError(r, 37.90001, 23.7, 281.5f, eh, ev);
+    CHECK(eh > 1.10f && eh < 1.12f);
+    CHECK(ev > 1.49f && ev < 1.51f);
+    refError(r, 37.9, 23.70001, 280, eh, ev); // east, scaled by cos(lat)
+    CHECK(eh > 0.87f && eh < 0.89f);
+    RefPoint none;
+    refError(none, 1, 1, 1, eh, ev);
+    CHECK(eh < 0 && ev < 0);
+
+    // Tracker and hold
+    MethodTracker t;
+    uint32_t now = 1000;
+    t.update(now, mkGga(2, -1, 37.9000010, 23.7), M_SBAS, 0.67f, 1.0f, r, true);
+    CHECK(t.current() == M_SBAS && !t.holding() && t.holdReady());
+    CHECK(t.stat(G_SBAS).seen && t.stat(G_SBAS).estH > 0.66f);
+    CHECK(t.stat(G_SBAS).errH > 0.1f && t.stat(G_SBAS).errH < 0.12f);
+    now += 1000;
+    t.update(now, mkGga(5, 9002, 37.90002, 23.7), M_HAS_CONV, 1.9f, 3.0f, r, true);
+    CHECK(t.current() == M_HAS_CONV && t.holding());
+    CHECK(t.holdLat() > 37.9000009 && t.holdLat() < 37.9000011);
+    CHECK(t.stat(G_SBAS).lastMs == 1000);            // SBAS stopped, last figures kept
+    CHECK(t.stat(G_HAS).startMs == 2000);
+    now += 1000;
+    t.update(now, mkGga(5, 9002), M_HAS_CONV, 0.6f, 1.0f, r, true); // now better than SBAS
+    CHECK(!t.holding());
+    now += 1000;
+    t.update(now, mkGga(5, 9002), M_HAS_CONV, 0.9f, 1.0f, r, true); // worse again: stays released
+    CHECK(!t.holding());
+    t.update(now + 1000, mkGga(5, 9002), M_HAS_CONV, 1.9f, 3.0f, r, false); // hold switched off
+    CHECK(!t.holding());
+    CHECK(t.traceCount() == 1);
+    t.update(now + 11000, mkGga(5, 9002), M_HAS_CONV, 0.5f, 1.0f, r, false);
+    CHECK(t.traceCount() == 2 && t.trace(1).estH < 0.51f && t.trace(0).method == M_SBAS);
+
+    // No hold without SBAS, and never with a stale SBAS position
+    MethodTracker t2;
+    t2.update(1000, mkGga(5, 9002), M_HAS_CONV, 1.9f, 3.0f, r, true);
+    CHECK(!t2.holding());
+    MethodTracker t3;
+    t3.update(1000, mkGga(2, -1), M_SBAS, 0.67f, 1.0f, r, true);
+    t3.update(1000 + MethodTracker::HOLD_MAX_MS + 1, mkGga(5, 9002), M_HAS_CONV, 1.9f, 3.0f, r, true);
+    CHECK(!t3.holding());
+
+    // Sentence rewriting
+    char out[300];
+    std::string gga = withChecksum("$GNGGA,120000.00,3758.1234567,N,02343.5678901,E,5,30,0.6,290.123,M,34.0,M,12.0,9002");
+    size_t n = nmeaReplacePosition(gga.c_str(), gga.size(), 37.9, -23.7, 280.5f, out, sizeof(out));
+    CHECK(n > 0 && nmeaChecksumOk(out, n));
+    GgaInfo g;
+    CHECK(nmeaParseGga(out, n, g));
+    CHECK(fabs(g.lat - 37.9) < 1e-9 && fabs(g.lon + 23.7) < 1e-9);
+    CHECK(g.quality == 2 && g.station == -1 && g.age < 0 && fabsf(g.alt - 280.5f) < 0.001f);
+    CHECK(g.sats == 30);
+    std::string rmc = withChecksum("$GNRMC,120000.00,A,3758.1234567,N,02343.5678901,E,0.01,0.0,051126,,,R,V");
+    n = nmeaReplacePosition(rmc.c_str(), rmc.size(), 37.5, 23.25, 0, out, sizeof(out));
+    CHECK(n > 0 && nmeaChecksumOk(out, n));
+    CHECK(strstr(out, ",3730.0000000,N,02315.0000000,E,") != nullptr);
+    std::string gll = withChecksum("$GNGLL,3758.1234567,N,02343.5678901,E,120000.00,A,R");
+    n = nmeaReplacePosition(gll.c_str(), gll.size(), 37.5, 23.25, 0, out, sizeof(out));
+    CHECK(n > 0 && strncmp(out, "$GNGLL,3730.0000000,N,02315.0000000,E,120000.00,A,R*", 52) == 0);
+    std::string gsa = withChecksum("$GNGSA,A,3,01,02,,,,,,,,,,,1.0,0.6,0.8,1");
+    CHECK(nmeaReplacePosition(gsa.c_str(), gsa.size(), 1, 1, 1, out, sizeof(out)) == 0);
+}
+
 int main()
 {
+    testMethods();
     testNmea();
     testRtcm();
     testSelector();

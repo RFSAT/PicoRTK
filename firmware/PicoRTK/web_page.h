@@ -36,6 +36,7 @@ label.check input{width:auto}
 textarea{min-height:80px}
 :focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .btn{font:500 14px var(--sans);border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:4px;padding:6px 12px;cursor:pointer}
+.btn:disabled{opacity:.5;cursor:not-allowed}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on)}
 .row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:14px}
@@ -68,6 +69,18 @@ pre{margin:0;background:var(--code);color:var(--codeink);font:12.5px/1.5 var(--m
 #msg{font:13px var(--mono)} #msg.err{color:var(--err)} #msg.ok{color:var(--ok)}
 [hidden]{display:none!important}
 /* Correction mode switch (Home) */
+.meth{border-collapse:collapse;width:100%;font-size:13px}
+.meth th{font:600 11px var(--sans);color:var(--muted);text-transform:uppercase;letter-spacing:.03em;text-align:left;padding:3px 8px 3px 0;white-space:nowrap}
+.meth td{padding:4px 8px 4px 0;border-top:1px solid var(--line);font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.meth td:first-child{font-family:var(--sans);font-weight:600}
+.meth tr.run td:first-child::before{content:"● ";color:var(--ok)}
+.meth tr.off td{color:var(--muted)}
+.methbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin-top:8px}
+.outline{margin:8px 0 0;font-size:13px}
+.outline.hold{color:var(--warn);font-weight:600}
+#trace{width:100%;height:150px;display:block;margin-top:8px}
+#trace text{font:11px var(--sans);fill:var(--muted)}
+.tw{overflow-x:auto}
 .modebar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
 .seg button{font:600 14px var(--sans);border:0;background:var(--bg);color:var(--ink);padding:7px 14px;cursor:pointer}
@@ -148,6 +161,23 @@ Dublin, Ireland · Athens, Greece<br>
 <section><h2>Corrections</h2><dl class="kv" id="sNtrip"></dl></section>
 <section><h2>Links</h2><dl class="kv" id="sLinks"></dl></section>
 </div>
+<section>
+<h2>Methods</h2>
+<p class="hint" data-help="The LG290P computes one position at a time. When the method changes (RTK, SBAS, Galileo HAS, GNSS only), the stopped method's last figures stay here, marked with how long ago it stopped. Estimated accuracy is the receiver's own figure; actual error is measured against the reference point.">The receiver calculates one method at a time. Rows marked ● are running now; the others show their last figures before they stopped.</p>
+<div class="tw"><table class="meth"><thead><tr><th>Method</th><th>Status</th><th data-help="The receiver's own accuracy estimate, horizontal and vertical (PQTMPPPNAV for Galileo HAS, otherwise PQTMEPE or GST). For a stopped method: its last value.">Estimated H · V</th><th data-help="Distance of the reported position from the reference point, horizontal and vertical. Shown only once a reference point is recorded from an RTK fixed solution.">Actual error H · V</th><th data-help="Best (smallest) horizontal estimate during the latest run of this method.">Best estimate</th><th>Time</th></tr></thead><tbody id="methRows"></tbody></table></div>
+<p class="outline" id="outLine"></p>
+<div class="methbar">
+<button type="button" class="btn" id="refSet" data-help="Records the current position as the reference point (the antenna's true position). Only from an RTK fixed solution, so the actual errors are measured against a centimetre-level point. Keep the antenna in the same place afterwards.">Set reference from RTK fix</button>
+<button type="button" class="btn" id="refClear">Clear reference</button>
+<span class="hint" id="refNote" style="margin:0"></span>
+</div>
+<div class="methbar">
+<label class="check" style="flex-direction:row;align-items:center;gap:6px;text-transform:none;font-size:14px;color:var(--ink)" data-help="Static demos only. While Galileo HAS is converging and its estimated accuracy is worse than the last SBAS fix, the Bluetooth and TCP outputs carry that last SBAS position (GGA, RMC, GLL, GNS) instead. It switches to HAS as soon as HAS is as good, and never holds a position older than 30 minutes. Wrong on a moving receiver: leave it off there."><input type="checkbox" id="holdSbas" style="width:auto"> Static demo: hold the last SBAS position until HAS is better</label>
+<span class="hint" id="holdNote" style="margin:0"></span>
+</div>
+<svg id="trace" role="img" aria-label="Accuracy over the last 30 minutes"></svg>
+<p class="hint" id="traceNote" style="margin:4px 0 0">Last 30 minutes, one point every 10 s: solid = receiver estimate, dashed = actual error (with a reference point). Background colour = method.</p>
+</section>
 <section><h2>Correction events</h2><pre id="log">…</pre></section>
 </div>
 <div data-page="corr" hidden>
@@ -307,6 +337,7 @@ else if(q===1){fixLabel="GNSS only";fixFrom="no corrections, 1-3 m"}
 else if(q===0){fixLabel="No fix";fixFrom="waiting for satellites"}
 else if(q===6){fixLabel="Dead reckoning";fixFrom="no satellites"}
 else{fixLabel=g.qualityName;fixFrom="–"}
+if(s.methods&&q!=null)fixLabel=s.methods.current;
 const m2=v=>v==null||v<0?"–":(v<0.1?(v*100).toFixed(1)+" cm":v<1?(v*100).toFixed(0)+" cm":v.toFixed(2)+" m");
 const acc=g.epeH!=null?`${m2(g.epeH)} H · ${m2(g.epeV)} V`:g.gstH!=null?`${m2(g.gstH)} H · ${m2(g.gstV)} V`:"–";
 const hasRow=P?`${SOL[P.sol]??("type "+P.sol)}${P.h!=null?" · "+m2(P.h):""}${P.age>=0?" · "+P.age.toFixed(0)+" s old":""}`
@@ -335,6 +366,7 @@ kv($("sLinks"),[
 ["Receiver UART",`${u.baud} bit/s · rx ${u.rxBytes} B · tx ${u.txBytes} B`],
 ["NMEA good / bad",u.nmeaGood+" / "+u.nmeaBad],["Dropped (queues full)",u.drops]]);
 document.querySelectorAll("#sources tr").forEach((el,i)=>el.classList.toggle("active",i===n.source-1));
+renderMethods(s);
 $("log").textContent=(await (await fetch("/api/log")).text()||"No events yet")+(n.lastGga?"\nLast GGA sent to the caster: "+n.lastGga:"");
 }catch(e){$("hdr").textContent="device not reachable"}
 }
@@ -513,6 +545,56 @@ if(r){const ms=parseInt(r.split(",")[2]),hz=Math.round(1000/ms);if([1,2,5,10].in
 }
 renderProfiles();
 $("nmeaPause").onclick=()=>{nmeaPaused=!nmeaPaused;$("nmeaPause").textContent=nmeaPaused?"Resume":"Pause"};
+// ---- Methods panel ----
+const METHCOL={0:"#9aa5a3",1:"#9aa5a3",2:"#d39b2a",3:"#6a8fd6",4:"#3aa0c8",5:"#1d7a3a",6:"#8e6bd6",7:"#5b3fb0",8:"#9aa5a3"};
+const METHNAME={0:"No fix",1:"GNSS only",2:"SBAS (EGNOS)",3:"DGNSS (RTCM)",4:"RTK float",5:"RTK fixed",6:"HAS converging",7:"HAS converged",8:"Dead reckoning"};
+const mfmt=v=>v==null||v<0?"–":(v<0.1?(v*100).toFixed(1)+" cm":v<1?(v*100).toFixed(0)+" cm":v.toFixed(2)+" m");
+const dur=t=>t<60?t+" s":t<3600?Math.floor(t/60)+" min "+(t%60)+" s":Math.floor(t/3600)+" h "+Math.floor(t%3600/60)+" min";
+let lastTrace=0;
+function renderMethods(s){
+const M=s.methods; if(!M) return;
+const rows=M.groups.filter(g=>g.seen).map(g=>{
+const sub=g.last!==g.name?` · ${g.running?"":"last "}${esc(g.last)}`:"";
+const st=(g.running?"running":"stopped")+sub;
+const est=g.estH!=null?`${mfmt(g.estH)} · ${mfmt(g.estV)}`:"–";
+const err=!M.ref.set?"no reference":g.errH!=null?`${mfmt(g.errH)} · ${mfmt(g.errV)}`:"–";
+const time=g.running?`for ${dur(g.runSec)}`:`ran ${dur(g.runSec)}, ended ${dur(g.endedAgoSec)} ago`;
+return `<tr class="${g.running?"run":"off"}"><td>${esc(g.name)}</td><td>${st}</td><td>${est}</td><td>${err}</td><td>${mfmt(g.bestEstH)}</td><td>${time}</td></tr>`});
+$("methRows").innerHTML=rows.join("")||`<tr><td colspan="6">No fix yet</td></tr>`;
+const H=M.hold, o=$("outLine");
+if(H.active){o.className="outline hold";o.textContent=`Apps receive: the held SBAS position from ${dur(H.sbasAgoSec)} ago (estimated ${mfmt(H.sbasEstH)}), until Galileo HAS is as good. Running: ${M.current}.`}
+else{o.className="outline";o.textContent=`Apps receive: the running method, ${M.current}.`}
+$("holdSbas").checked=!!H.enabled;
+$("holdNote").textContent=holdMsg||(H.enabled?(H.active?"Holding.":"Not holding: "+H.reason+"."):"");
+// keep the settings object in step, so Save and restart on another tab does not undo these
+if(cfg){cfg.corrections=cfg.corrections||{};cfg.corrections.holdSbas=!!H.enabled;cfg.reference=M.ref.set?{set:true,lat:+M.ref.lat,lon:+M.ref.lon,alt:+M.ref.alt}:{set:false,lat:0,lon:0,alt:0}}
+$("refNote").textContent=refMsg||(M.ref.set?`Reference: ${M.ref.lat}, ${M.ref.lon}, ${(+M.ref.alt).toFixed(3)} m`:"No reference point: actual errors are not shown.");
+$("refSet").disabled=M.currentCode!==5;
+$("refSet").title=M.currentCode===5?"":"Needs RTK fixed (now: "+M.current+")";
+if(Date.now()-lastTrace>10000){lastTrace=Date.now();drawTrace()}
+}
+async function drawTrace(){
+let d; try{d=await (await fetch("/api/trace")).json()}catch(e){return}
+const svg=$("trace"), W=svg.clientWidth||600, Hh=150, L=44, R=6, T=6, B=18, sm=d.samples||[];
+const span=1800, t0=d.now-span, x=t=>L+(t-t0)/span*(W-L-R);
+const vals=sm.flatMap(p=>[p[2],p[3]]).filter(v=>v>=0);
+const top=Math.max(0.05,...vals)*1.15, lg=top>2, y=v=>T+(1-(lg?Math.log10(v*100+1)/Math.log10(top*100+1):v/top))*(Hh-T-B);
+let g=`<rect x="${L}" y="${T}" width="${W-L-R}" height="${Hh-T-B}" fill="none" stroke="var(--line)"/>`;
+for(let i=0;i<sm.length;i++){const a=sm[i],b=sm[i+1],xa=x(a[0]),xb=b?x(b[0]):x(d.now);if(xb>L)g+=`<rect x="${Math.max(L,xa)}" y="${T}" width="${Math.max(0,xb-Math.max(L,xa))}" height="${Hh-T-B}" fill="${METHCOL[a[1]]}" opacity=".18"><title>${METHNAME[a[1]]}</title></rect>`}
+const line=(k,dash)=>{let p="",pen=false;for(const s of sm){if(s[k]<0){pen=false;continue}p+=(pen?"L":"M")+x(s[0]).toFixed(1)+" "+y(s[k]).toFixed(1);pen=true}return p?`<path d="${p}" fill="none" stroke="var(--ink)" stroke-width="1.5"${dash?' stroke-dasharray="4 3"':""}/>`:""};
+g+=line(2,false)+line(3,true);
+const ticks=lg?[0.01,0.1,1,10].filter(v=>v<=top):[0,top/2,top];
+for(const v of ticks)g+=`<text x="${L-4}" y="${y(v)+4}" text-anchor="end">${mfmt(v)}</text>`;
+for(const m of [30,20,10,0])g+=`<text x="${x(d.now-m*60)}" y="${Hh-4}" text-anchor="${m?"middle":"end"}">${m?"−"+m+" min":"now"}</text>`;
+svg.setAttribute("viewBox",`0 0 ${W} ${Hh}`);svg.innerHTML=g;
+const seen=[...new Set(sm.map(p=>p[1]))];$("traceNote").innerHTML="Last 30 minutes, one point every 10 s: solid line = receiver estimate, dashed = actual error (needs a reference point). Background: "+seen.map(m=>`<span style="color:${METHCOL[m]}">■</span> ${METHNAME[m]}`).join(" · ");
+}
+let refMsg="", holdMsg="";
+addEventListener("resize",()=>{clearTimeout(drawTrace.t);drawTrace.t=setTimeout(drawTrace,300)});
+$("refSet").onclick=async()=>{const r=await fetch("/api/ref",{method:"POST",body:"set"});refMsg=(r.ok?"":"Not set: ")+await r.text();await status();setTimeout(()=>refMsg="",8000)};
+$("refClear").onclick=async()=>{if(!confirm("Clear the reference point? Actual errors are no longer shown."))return;const r=await fetch("/api/ref",{method:"POST",body:"clear"});refMsg=await r.text();await status();setTimeout(()=>refMsg="",8000)};
+$("holdSbas").onchange=async e=>{if(e.target.checked&&!confirm("Hold the last SBAS position while Galileo HAS converges?\n\nOnly for an antenna that does not move: the apps receive a frozen position during that time."))return e.target.checked=false;
+const r=await fetch("/api/hold",{method:"POST",body:e.target.checked?"on":"off"});holdMsg=await r.text();await status();setTimeout(()=>holdMsg="",8000)};
 async function setMode(m){
 if(m===curMode) return;
 const txt=m==="has"
