@@ -27,7 +27,15 @@ The Waveshare board (33 × 33 mm) has 9 castellated pads on each side. Use **UAR
 - The 4-pin UART3 connector (GND, 3V3, TXD3, RXD3) suits bench wiring. In the box, wires soldered to the pads are smaller.
 - The I2C connector (SDA, SCL) is not used; Waveshare lists I2C as not yet supported.
 
-**Compact assembly (boxed unit):**
+**Prototype assembly (pluggable, current choice):**
+
+- Solder the two supplied 2.54 mm headers to the LG290P board, and male headers to the Pico 2 W.
+- Plug both boards into female header strips on a small perfboard carrier: the Pico on one side, the LG290P on the other, back to back. All the wiring (5V–VBUS, GND, RXD3–GP0, TXD3–GP1, RTK–GP2, PPS–GP3, RST–GP4) runs on the carrier, so either board can be unplugged and reused.
+- Reserve a 2-pin JST-PH socket on the carrier for a later battery board feeding the 5 V rail.
+- Expect about 55 × 38 × 20 mm. The Pico's antenna end stays clear, as below.
+- For quick bench tests without the carrier, the supplied SH1.0 4-pin cable on the UART3 connector carries GND, TXD3 and RXD3. Leave its 3V3 lead unconnected, and power the board from its 5V pin or its USB-C.
+
+**Compact assembly (later, soldered):**
 
 - Mount the two boards back to back, with insulating tape and a thin foam pad between them. The LG290P board covers the USB half of the Pico. Its right edge (5V, GND, RXD3, TXD3, RST, PPS) lies across the Pico's USB end, so every wire is under 15 mm. The stack is about 51 × 33 × 11 mm.
 - Keep the Pico's antenna end (the 18 mm opposite the USB) uncovered and away from metal: that is the Wi-Fi and Bluetooth antenna.
