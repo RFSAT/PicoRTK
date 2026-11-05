@@ -223,7 +223,7 @@ Dublin, Ireland · Athens, Greece<br>
 </section>
 <section>
 <div class="row" style="justify-content:space-between"><h2>Live output</h2><span class="row"><span class="hint" id="nmeaRate"></span><button class="btn" id="nmeaPause" type="button">Pause</button></span></div>
-<pre id="nmeaText" style="max-height:60vh">Waiting for data…</pre>
+<pre id="nmeaText" style="max-height:max(150px,calc(60vh - 131px))">Waiting for data…</pre>
 </section>
 </div>
 <div data-page="rx" hidden>
