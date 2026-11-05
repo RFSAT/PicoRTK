@@ -23,11 +23,11 @@ $fn       = 48;
 gnss_w     = 33;     // LG290P board, square
 gnss_t     = 1.0;    // GNSS board thickness that makes the 2 mm gap with 7 mm and 10 mm spacers (see echo below)
 gnss_y0    = -6;     // its UART/USB-C edge
-gnss_stand = 7;      // spacer height under the GNSS board (its component side faces the floor; battery 7 mm)
+gnss_stand = 7;      // column height under the GNSS board (its component side faces the floor; battery 7 mm)
 pico_l     = 51;
 pico_w     = 21;
 pico_t     = 1.0;
-pico_stand = 10;     // spacer height under the Pico (two spacers, antenna end)
+pico_stand = 10;     // column height under the Pico (two columns, antenna end)
 above_pico = 6;      // free height above the Pico PCB (micro-USB is 2.7 mm, wires over the top)
 
 /* [Clearances to the walls] */
@@ -44,6 +44,9 @@ btn_hole = 3.2;      // BOOTSEL (lid) and RST (floor) access holes
 
 /* [Screws] */
 m2_clear = 2.4;  m2_head = 4.4;  m2_pilot = 1.7;
+col_d_gnss = 4.5;   // printed columns under the GNSS board's four corner holes
+col_d_pico = 4.2;   // printed columns under the Pico's two antenna-end holes
+col_pilot  = 1.7;   // M2 thread-forming screws; use 3.2 for M2 heat-set inserts
 boss_r = 2.5;
 
 // ---------------- derived positions ----------------
@@ -91,6 +94,15 @@ module base() {
         translate([0, 0, -floor_t]) linear_extrude(z_in1 + floor_t) rrect(x_in0 - wall, x_in1 + wall, y_in0 - wall, y_in1 + wall, 2.5);
         linear_extrude(z_in1 + 1) rrect(x_in0, x_in1, y_in0, y_in1, 0.8);
       }
+      // board columns, printed with the floor: 7 mm for the GNSS board, 10 mm for the Pico
+      for (h = gnss_holes) translate([h[0], h[1], -0.01]) {
+        cylinder(d = col_d_gnss, h = gnss_stand + 0.01);
+        cylinder(d1 = col_d_gnss + 2, d2 = col_d_gnss, h = 1);          // fillet at the foot
+      }
+      for (h = pico_holes) translate([h[0], h[1], -0.01]) {
+        cylinder(d = col_d_pico, h = pico_stand + 0.01);
+        cylinder(d1 = col_d_pico + 2, d2 = col_d_pico, h = 1);
+      }
       // lid screw bosses
       for (b = bosses_floor) translate([b[0], b[1], 0]) cylinder(r = boss_r, h = z_in1);
       // back-left boss hangs from the walls above the GNSS board, with a 45-degree cone under it for printing
@@ -99,11 +111,9 @@ module base() {
         translate([0, 0, -boss_r + 0.5]) cylinder(r1 = 0.5, r2 = boss_r, h = boss_r - 0.5);
       }
     }
-    // spacer screws through the floor, countersunk from below
-    for (h = concat(gnss_holes, pico_holes)) translate([h[0], h[1], 0]) {
-      translate([0, 0, -floor_t - 1]) cylinder(d = m2_clear, h = floor_t + 2);
-      translate([0, 0, -floor_t - 0.01]) cylinder(d1 = m2_head, d2 = m2_clear, h = (m2_head - m2_clear) / 2);
-    }
+    // screw pilots in the board columns (6 mm deep)
+    for (h = gnss_holes) translate([h[0], h[1], gnss_stand - 6]) cylinder(d = col_pilot, h = 7);
+    for (h = pico_holes) translate([h[0], h[1], pico_stand - 6]) cylinder(d = col_pilot, h = 7);
     // lid screw pilots
     for (b = all_bosses) translate([b[0], b[1], z_in1 - 6]) cylinder(d = m2_pilot, h = 7);   // M2 x 6 thread-forming screws
     // micro-USB: U-slot from the top of the left wall
@@ -163,8 +173,6 @@ module ghost() {
   color("ForestGreen", 0.9) translate([0, 0, pico_z0]) cube([pico_l, pico_w, pico_t]);
   color("Silver") translate([-1.3, 6.6, pico_top]) cube([5.7, 7.8, 2.6]);                     // micro-USB
   color("LightGrey", 0.7) translate([1, -4, gnss_top]) cube([31, 29, gap]);                   // foam
-  color("DimGrey") for (h = gnss_holes) translate([h[0], h[1], 0]) cylinder(d = 3.2, h = gnss_stand, $fn = 6);
-  color("DimGrey") for (h = pico_holes) translate([h[0], h[1], 0]) cylinder(d = 3.2, h = pico_stand, $fn = 6);
 }
 
 if (part == "base") base();

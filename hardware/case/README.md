@@ -8,9 +8,9 @@ Two printed parts: `picortk_case_base.stl` and `picortk_case_lid.stl`. Both are 
 
 | Item | Height |
 |---|---|
-| LG290P board, component side down | 7 mm spacers; its battery reaches the floor |
+| LG290P board, component side down | 7 mm printed columns; its battery reaches the floor |
 | Gap between the boards | 2 mm |
-| Pico 2 W | 10 mm spacers, at its two antenna-end holes |
+| Pico 2 W | 10 mm printed columns, at its two antenna-end holes |
 | Free space above the Pico PCB | 6 mm |
 
 - Both boards are flush at the Pico's USB end and centred across.
@@ -27,15 +27,21 @@ Two printed parts: `picortk_case_base.stl` and `picortk_case_lid.stl`. Both are 
 | RST | floor | 3.2 mm hole: press with a straightened paperclip (the button faces down) |
 | Pico LED | lid | 2 mm light window |
 
+## Board columns
+
+The base has six printed columns, each with a 1.7 mm pilot hole for an M2 thread-forming screw:
+
+- four 7 mm columns (4.5 mm across) under the GNSS board's corner holes;
+- two 10 mm columns (4.2 mm across) under the Pico's antenna-end holes.
+
+To use M2 heat-set inserts instead, set `col_pilot = 3.2`.
+
 ## Hardware
 
 | Part | Qty |
 |---|---|
-| M2 female–female standoff, 7 mm (GNSS board) | 4 |
-| M2 female–female standoff, 10 mm (Pico) | 2 |
-| M2 × 4 countersunk screw, from below into the standoffs | 6 |
-| M2 × 4 pan-head screw, boards onto the standoffs | 6 |
-| M2 × 6 countersunk thread-forming screw for plastic, for the lid | 4 |
+| M2 × 5 thread-forming screw for plastic (boards onto the columns) | 6 |
+| M2 × 6 countersunk thread-forming screw (lid) | 4 |
 
 ## Printing
 
@@ -45,16 +51,15 @@ Two printed parts: `picortk_case_base.stl` and `picortk_case_lid.stl`. Both are 
 
 ## Assembly
 
-1. Screw the six standoffs to the floor from below.
-2. Put the boards on, already taped together. The SMA drops into its U-slot and the micro-USB into its slot.
-3. Screw the GNSS board down at its four corners; they are clear of the Pico. Then screw the Pico at its two antenna-end holes.
-4. Plug in the UART cable, fit the lid, and screw it down.
+1. Put the boards on, already taped together. The SMA drops into its U-slot and the micro-USB into its slot.
+2. Screw the GNSS board down at its four corners; they are clear of the Pico. Then screw the Pico at its two antenna-end holes.
+3. Plug in the UART cable, fit the lid, and screw it down.
 
 ## Check against your boards before printing
 
 All of these are parameters at the top of the `.scad` file.
 
-- **`gnss_t = 1.0`:** your spacer heights (7 and 10 mm) and the 2 mm gap imply a 1.0 mm GNSS board. If it is 1.6 mm, the Pico spacer must be 10.6 mm, or the gap becomes 1.4 mm. OpenSCAD prints the resulting gap.
+- **`gnss_t = 1.0`:** the column heights (7 and 10 mm) and the 2 mm gap imply a 1.0 mm GNSS board. If it is 1.6 mm, set `pico_stand = 10.6`, or the gap becomes 1.4 mm. OpenSCAD prints the resulting gap.
 - **Button positions:**
   - Pico BOOTSEL: x = 12.0, y = 7.2 from the USB end and pin-1 edge.
   - LG290P RST: x = 4.6, y = 3.6 from the USB end and UART edge. It must not be covered by the battery.
