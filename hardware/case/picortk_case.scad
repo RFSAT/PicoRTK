@@ -38,7 +38,7 @@ sma_flange = 1.9;    // the SMA's square flange sticks out this far beyond the G
 /* [Openings] */
 usb_micro_w = 12.0;  // micro-USB plug overmould, width
 usb_micro_z = 8.5;   // bottom of the U-slot (Pico top 11 + 1.3 - half the plug height)
-usbc_w = 13.0;  usbc_h = 7.6;   // USB-C plug overmould opening
+usbc_w = 10.5;  usbc_h = 6.0;   // USB-C opening: the plug body must pass, because the socket is 5 mm behind the outer wall face (4 mm cable gap + wall); fits slim plugs, use 12.5 x 7 for bulky ones
 sma_d  = 6.9;        // 1/4-36 UNS thread is 6.35 mm
 btn_hole = 3.2;      // BOOTSEL (lid) and RST (floor) access holes
 
