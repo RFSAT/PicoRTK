@@ -48,7 +48,7 @@ To use M2 heat-set inserts instead, set `col_pilot = 3.2`.
 
 - **Base:** print floor down.
 - **Lid:** printed top face down (the STL is already oriented).
-- **Settings:** 0.2 mm layers, 3 walls, PETG or PLA. No supports needed: the back-left lid boss hangs from the wall above the GNSS board on a 45° cone. The one boss hung from the back wall has a 45° cone under it.
+- **Settings:** 0.2 mm layers, 3 walls, PETG or PLA. No supports needed: the back-left lid boss hangs from the wall above the GNSS board on a 45° cone.
 
 ## Assembly
 
