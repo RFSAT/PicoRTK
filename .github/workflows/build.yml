@@ -40,13 +40,24 @@ jobs:
         with:
           version: 1.3.1
 
+      # The core and its toolchains (about 300 MB) are cached, so most runs download nothing
+      - name: Cache the Pico core
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.arduino15
+            ~/Arduino/libraries
+          key: arduino-pico-${{ env.ARDUINO_PICO_VERSION }}-json-${{ env.ARDUINOJSON_VERSION }}
+
+      # GitHub's release downloads time out now and then (HTTP 504): retry each install up to 4 times
       - name: Install the Pico core
         run: |
-          arduino-cli config init
+          retry() { for i in 1 2 3 4; do "$@" && return 0; echo "attempt $i failed, retrying in $((i * 20)) s"; sleep $((i * 20)); done; return 1; }
+          arduino-cli config init --overwrite
           arduino-cli config add board_manager.additional_urls https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json
-          arduino-cli core update-index
-          arduino-cli core install rp2040:rp2040@${ARDUINO_PICO_VERSION}
-          arduino-cli lib install ArduinoJson@${ARDUINOJSON_VERSION}
+          retry arduino-cli core update-index
+          retry arduino-cli core install rp2040:rp2040@${ARDUINO_PICO_VERSION}
+          retry arduino-cli lib install ArduinoJson@${ARDUINOJSON_VERSION}
 
       - name: Build UF2
         run: |
