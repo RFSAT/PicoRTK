@@ -10,13 +10,28 @@ The LG290P computes the RTK solution. The Pico handles everything around it:
 
 ## Wiring
 
-| Waveshare LG290P | Pico 2 W | Purpose |
+The Waveshare board (33 × 33 mm) has 9 castellated pads on each side. Use **UART3**: its default protocol setting is NMEA and RTCM3 both in and out, so one UART carries corrections in, NMEA out, and the replies to the NMEA-tab commands. All the Pico pins used are at its USB end.
+
+| Waveshare LG290P pad | Pico 2 W pin | Purpose |
 |---|---|---|
-| 5V | VSYS (or VBUS) | power |
-| GND | GND | ground |
-| RXD | GP0 (UART0 TX) | RTCM and commands into the receiver |
-| TXD | GP1 (UART0 RX) | NMEA out of the receiver |
-| RTK | GP2 | fix status (optional) |
+| 5V (right edge) | 40 VBUS | power (5 V from the Pico's USB) |
+| GND (right edge) | 38 GND (or 3) | ground |
+| RXD3 (right edge) | 1 GP0 (UART0 TX) | RTCM and commands into the receiver |
+| TXD3 (right edge) | 2 GP1 (UART0 RX) | NMEA and replies out of the receiver |
+| RTK (left edge) | 4 GP2 | fix status (optional) |
+| PPS (right edge) | 5 GP3 | 1PPS (optional, not used by the firmware yet) |
+| RST (right edge) | 6 GP4 | receiver reset (optional, not used by the firmware yet) |
+
+- Both boards use 3.3 V logic, so the signals connect directly.
+- Do not connect any 3V3 pad or the 3V3 pin of the 4-pin UART3 connector to the Pico's 3V3: the board makes its own 3.3 V from 5 V, and two regulators must not be tied together.
+- The 4-pin UART3 connector (GND, 3V3, TXD3, RXD3) suits bench wiring. In the box, wires soldered to the pads are smaller.
+- The I2C connector (SDA, SCL) is not used; Waveshare lists I2C as not yet supported.
+
+**Compact assembly (boxed unit):**
+
+- Mount the two boards back to back, with insulating tape and a thin foam pad between them. The LG290P board covers the USB half of the Pico. Its right edge (5V, GND, RXD3, TXD3, RST, PPS) lies across the Pico's USB end, so every wire is under 15 mm. The stack is about 51 × 33 × 11 mm.
+- Keep the Pico's antenna end (the 18 mm opposite the USB) uncovered and away from metal: that is the Wi-Fi and Bluetooth antenna.
+- Bring the GNSS antenna in through an SMA bulkhead on the box wall at the LG290P end, with a short IPEX–SMA pigtail. Use a plastic box.
 
 **Alternative board: ZJI RF "LG290P Full Freq Dev" (AliExpress).** It carries two 6-pin rows, EN · GND · TX · RX · VCC · PPS, one row for each of the LG290P's two UARTs.
 
@@ -42,7 +57,7 @@ Check the pin labels against Waveshare's pinout before powering up.
 1. Update the LG290P firmware to a release with Galileo HAS.
 2. Set rover mode, with all constellations and bands, and E6 on.
 3. Set the outputs to GGA, RMC, GSA, GSV and GST at 1 Hz (up to 10 Hz for vehicles).
-4. Set **UART1 to 460800 bit/s**, carrying NMEA out and RTCM in.
+4. Check that **UART3** (the one wired to the Pico) runs at **460800 bit/s** with NMEA out and RTCM3 in (the default: `$PQTMCFGUART,R,3` and `$PQTMCFGPROT,R,1,3`).
 5. Enable PPP/HAS.
 6. Save to flash and power-cycle to confirm the settings persist.
 
