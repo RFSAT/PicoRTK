@@ -33,6 +33,11 @@ struct Config
     WifiNet wifi[CFG_MAX_WIFI];
     NtripSource src[CFG_MAX_SOURCES];
 
+    // Correction mode: "rtk" = NTRIP corrections (Galileo HAS as the receiver's fallback),
+    //                  "has" = Galileo HAS from the satellites only, NTRIP off (no internet needed)
+    String mode = "rtk";
+    bool galileoHas = true; // Galileo HAS (PPP) enabled in the receiver; always on in "has" mode
+
     // Failover
     bool failover = true;
     uint32_t failbackSec = 600;  // return to source 1 (0 = never)

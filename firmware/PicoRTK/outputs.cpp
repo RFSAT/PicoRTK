@@ -152,7 +152,7 @@ void outputsLoop(bool ntripStreaming)
     }
 
     // Inbound bytes: RTCM from apps that run their own NTRIP client
-    bool accept = cfg.inboundRtcm && !ntripStreaming;
+    bool accept = cfg.inboundRtcm && !ntripStreaming && cfg.mode != "has"; // HAS mode: no RTCM from apps either
     if (useSpp)
     {
         int a = SerialBT.available();

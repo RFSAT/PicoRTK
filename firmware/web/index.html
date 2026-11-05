@@ -64,6 +64,12 @@ textarea{min-height:80px}
 pre{margin:0;background:var(--code);color:var(--codeink);font:12.5px/1.5 var(--mono);padding:8px;border-radius:4px;overflow:auto;max-height:320px;white-space:pre-wrap}
 #msg{font:13px var(--mono)} #msg.err{color:var(--err)} #msg.ok{color:var(--ok)}
 [hidden]{display:none!important}
+/* Correction mode switch (Home) */
+.modebar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{font:600 14px var(--sans);border:0;background:var(--bg);color:var(--ink);padding:7px 14px;cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed=true]{background:var(--accent);color:var(--on)}
 /* NMEA application profiles */
 .profiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,190px),1fr));gap:5px}
 .prof{text-align:left;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:4px 8px;cursor:pointer;display:flex;flex-direction:column;gap:0;min-width:0}
@@ -126,6 +132,14 @@ dt[data-help],th[data-help]{text-decoration:underline dotted var(--muted);text-u
       <p class="hint" style="margin-top:8px">Built with Arduino-Pico, BTstack, lwIP and ArduinoJson.<br>Developed with the help of Claude AI (Anthropic).</p>
     </div>
   </section>
+  <section class="modebar">
+    <h2 style="margin:0">Corrections</h2>
+    <div class="seg" role="group" aria-label="Correction mode">
+      <button type="button" id="modeRtk" aria-pressed="false">RTK via NTRIP</button>
+      <button type="button" id="modeHas" aria-pressed="false">Galileo HAS</button>
+    </div>
+    <span class="hint" id="modeNote" style="margin:0"></span>
+  </section>
   <div class="tiles">
     <section><h2>Position</h2><dl class="kv" id="sGnss"></dl></section>
     <section><h2>Corrections</h2><dl class="kv" id="sNtrip"></dl></section>
@@ -140,6 +154,7 @@ dt[data-help],th[data-help]{text-decoration:underline dotted var(--muted);text-u
     <p class="hint">Sources are tried in order. A failure (no connection, no reply, rejected login or mount point, no RTCM for the timeout, or a correction age above the limit) moves to the next source. After every source has failed in a row the device waits (back-off) before starting again from source 1.</p>
     <div class="grid">
       <label class="check"><input type="checkbox" id="failover"> Failover between sources</label>
+      <label class="check"><input type="checkbox" id="galileoHas"> Galileo HAS fallback</label>
       <label>Return to source 1 (s)<input type="number" id="failbackSec" min="0"></label>
       <label>No-data timeout (s)<input type="number" id="dataTimeoutSec" min="5"></label>
       <label>Max correction age (s)<input type="number" id="maxAgeSec" min="0"></label>
@@ -247,6 +262,7 @@ dt[data-help],th[data-help]{text-decoration:underline dotted var(--muted);text-u
 <div id="tip" role="tooltip" hidden></div>
 <script>
 const $=id=>document.getElementById(id);
+let curMode="rtk";
 let cfg=null, nmeaVisible=false, nmeaPaused=false, nmeaSel=new Set(), nmeaCounts={};
 const TYPES={base:"Own base",vrs:"VRS",near:"Nearest station",other:"Other"};
 
@@ -267,11 +283,17 @@ async function status(){
     const s=await (await fetch("/api/status")).json();
     $("hdr").textContent=`v${s.version}${s.privateDefaults?" (private build)":""} · ${s.wifi.mode} ${s.wifi.ssid||""} ${s.wifi.ip} · up ${Math.floor(s.uptimeSec/60)} min · last reset: ${s.lastReset||"?"}`;
     const g=s.gnss;
+    curMode=s.mode||"rtk";
+    $("modeRtk").setAttribute("aria-pressed",curMode==="rtk");$("modeHas").setAttribute("aria-pressed",curMode==="has");
+    const hasFix=g.station===9002;
+    $("modeNote").textContent=curMode==="has"
+      ? "Galileo HAS from the satellites, no internet needed: about 20 cm after it converges (several minutes)."+(hasFix?" HAS solution active.":" Waiting for the HAS solution.")
+      : "NTRIP corrections over Wi-Fi: centimetre level."+(s.galileoHas?" Galileo HAS takes over if they stop.":"");
     kv($("sGnss"),[
-      ["Fix",`<span class="pill q${g.quality??0}">${esc(g.qualityName)}</span>`],
+      ["Fix",`<span class="pill q${g.quality??0}">${esc(hasFix?"Galileo HAS"+(g.quality===4?" (converged)":g.quality===5?" (converging)":""):g.qualityName)}</span>`],
       ["Satellites",g.sats??"–"],["HDOP",g.hdop??"–"],
       ["Latitude",g.lat??"–"],["Longitude",g.lon??"–"],["Altitude",g.alt!=null?g.alt.toFixed(3)+" m":"–"],
-      ["Correction age",g.age>=0?g.age.toFixed(1)+" s":"–"],["Base station",g.station>=0?g.station:"–"],["UTC",g.utc||"–"]]);
+      ["Correction age",g.age>=0?g.age.toFixed(1)+" s":"–"],["Base station",g.station===9002?"9002 · Galileo HAS":g.station>=0?g.station:"–"],["UTC",g.utc||"–"]]);
     const n=s.ntrip;
     kv($("sNtrip"),[
       ["State",esc(n.state)],["Source",`${n.source} · ${esc(n.sourceName)}`],["Caster",esc(n.host)+"/"+esc(n.mount)],
@@ -308,7 +330,7 @@ function sourceCard(s,i){
 async function loadConfig(){
   cfg=await (await fetch("/api/config")).json();
   const f=cfg.failover,o=cfg.outputs,r=cfg.receiver;
-  $("failover").checked=f.enabled;$("failbackSec").value=f.failbackSec;$("dataTimeoutSec").value=f.dataTimeoutSec;
+  $("failover").checked=f.enabled;$("galileoHas").checked=(cfg.corrections||{}).galileoHas!==false;$("failbackSec").value=f.failbackSec;$("dataTimeoutSec").value=f.dataTimeoutSec;
   $("maxAgeSec").value=f.maxAgeSec;const bp=cfg.benchPosition||{};$("benchLat").value=bp.lat||0;$("benchLon").value=bp.lon||0;$("benchAlt").value=bp.alt||0;$("ggaSec").value=f.ggaSec;$("backoffSec").value=f.backoffSec.join(",");
   $("sources").innerHTML=cfg.ntrip.map(sourceCard).join("");
   let w="";for(let i=0;i<4;i++){const n=cfg.wifi[i]||{};w+=`<tr><td class="n">${i+1}</td><td><input id="w${i}ssid" value="${esc(n.ssid)}" placeholder="SSID"></td><td><input type="password" id="w${i}pass" value="${esc(n.pass)}" autocomplete="new-password"></td></tr>`}
@@ -331,12 +353,13 @@ function collect(){
     benchPosition:{lat:+$("benchLat").value||0,lon:+$("benchLon").value||0,alt:+$("benchAlt").value||0},
     outputs:{bt:$("bt").value,usb:$("usb").checked,tcpPort:+$("tcpPort").value,inboundRtcm:$("inboundRtcm").checked,
       nmeaTypes:[...nmeaSel]},
+    corrections:{mode:(cfg.corrections||{}).mode||"rtk",galileoHas:$("galileoHas").checked},
     receiver:{uartBaud:+$("uartBaud").value,bootCmds:$("bootCmds").value.split("\n").map(s=>s.trim()).filter(Boolean)}};
 }
 
 function check(c){
   for(const [i,s] of c.ntrip.entries()) if(s.host&&!s.mount) return `Source ${i+1}: add a mount point or clear the host.`;
-  if(!c.ntrip.some(s=>s.host&&s.mount)) return "Add at least one correction source.";
+  if(c.corrections.mode!=="has"&&!c.ntrip.some(s=>s.host&&s.mount)) return "Add at least one correction source.";
   if(c.web.apPass.length<8) return "The access point password needs 8 or more characters.";
   return "";
 }
@@ -469,6 +492,17 @@ async function readFixRate(){
 }
 renderProfiles();
 $("nmeaPause").onclick=()=>{nmeaPaused=!nmeaPaused;$("nmeaPause").textContent=nmeaPaused?"Resume":"Pause"};
+async function setMode(m){
+  if(m===curMode) return;
+  const txt=m==="has"
+    ? "Switch to Galileo HAS?\n\nThe NTRIP corrections stop and the receiver uses Galileo HAS from the satellites (about 20 cm, several minutes to converge). Wi-Fi stays on for this page."
+    : "Switch to RTK via NTRIP?\n\nThe Pico connects to the correction sources again (centimetre level once fixed).";
+  if(!confirm(txt)) return;
+  const r=await fetch("/api/mode",{method:"POST",body:m});msg(await r.text(),r.ok?"ok":"err");
+  if(r.ok){curMode=m;if(cfg){cfg.corrections=cfg.corrections||{};cfg.corrections.mode=m}status()}
+}
+$("modeRtk").onclick=()=>setMode("rtk");
+$("modeHas").onclick=()=>setMode("has");
 $("factory").onclick=async()=>{
   if(!confirm("Delete all saved settings and restart with the defaults built into this firmware?\n\nWi-Fi networks, correction sources and passwords return to the built-in values. Download a backup first if you want to keep the current ones."))return;
   const r=await fetch("/api/factory",{method:"POST"});msg(await r.text(),r.ok?"ok":"err");setTimeout(()=>location.reload(),9000)};
@@ -517,6 +551,9 @@ const HELP={
   uploadLbl:"Load a settings file saved from this or another PicoRTK. It replaces everything and restarts the Pico.",
   reboot:"Restart the Pico. Corrections and Bluetooth/TCP links drop for about 20 s.",
   shutdown:"Stop everything safely and halt, so the Pico can be unplugged.",
+  modeRtk:"Centimetre-level RTK with corrections from the NTRIP sources over Wi-Fi (Corrections tab).",
+  modeHas:"Galileo High Accuracy Service from the satellites (E6): about 20 cm horizontal after several minutes of convergence, no internet needed. NTRIP is off in this mode.",
+  galileoHas:"In RTK mode, let the receiver fall back to Galileo HAS when NTRIP corrections stop (needs LG290P firmware with PPP support).",
   factory:"Delete the saved settings and restart with the defaults built into this firmware (on a private build: your Wi-Fi and caster logins).",
   save:"Store the settings on all tabs in flash and restart the Pico to apply them.",
   nmeaApply:"Switch the selected messages on and every other listed message off in the LG290P (GGA always stays on, the Pico needs it), set the fix rate, save in the receiver and restart it. The replies are shown below.",

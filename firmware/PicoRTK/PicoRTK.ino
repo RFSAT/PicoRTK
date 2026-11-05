@@ -147,8 +147,21 @@ static void logStatus()
         ntripStateName(s.state), s.source + 1, (unsigned long)stats.uartRxBytes.load());
 }
 
+// Galileo HAS (PPP, E6) in the receiver: on in "has" mode, and as the fallback in "rtk" mode unless turned off.
+// WGS84, 120 s timeout, converged at 0.10 m horizontal / 0.15 m vertical (Quectel LG290P PPP application note).
+// Not saved in the receiver: sent at every start-up and on every mode change.
+void sendHasCommand()
+{
+    const char *c = (cfg.mode == "has" || cfg.galileoHas) ? "$PQTMCFGPPP,W,2,1,120,0.10,0.15" : "$PQTMCFGPPP,W,0";
+    char out[64];
+    size_t n = nmeaFinish(c, out, sizeof(out));
+    if (n)
+        cmdToRx.write((const uint8_t *)out, n);
+}
+
 static void sendBootCommands()
 {
+    sendHasCommand();
     for (int i = 0; i < CFG_MAX_BOOTCMDS; i++)
     {
         if (!cfg.bootCmd[i].length())

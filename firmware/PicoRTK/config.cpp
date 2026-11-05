@@ -8,6 +8,7 @@
 #if __has_include("defaults_local.h")
 #include "defaults_local.h"
 #endif
+#include "nmea.h"
 #include "util.h"
 
 Config cfg;
@@ -110,6 +111,10 @@ String configToJson(bool withSecrets)
             from = comma + 1;
         }
     }
+
+    JsonObject cm = d["corrections"].to<JsonObject>();
+    cm["mode"] = cfg.mode;
+    cm["galileoHas"] = cfg.galileoHas;
 
     JsonObject r = d["receiver"].to<JsonObject>();
     r["uartBaud"] = cfg.uartBaud;
@@ -241,7 +246,7 @@ bool configFromJson(const String &json, String &err)
                 String t = v.as<String>();
                 t.trim();
                 t.toUpperCase();
-                if (!t.length() || t.length() > 10)
+                if (!t.length() || t.length() >= NMEA_ID_MAX)
                     continue;
                 if (list.length())
                     list += ",";
@@ -249,6 +254,13 @@ bool configFromJson(const String &json, String &err)
             }
             c.nmeaTypes = list;
         }
+    }
+
+    JsonVariantConst cm = d["corrections"];
+    if (!cm.isNull())
+    {
+        getStr(cm["mode"], c.mode);
+        getNum(cm["galileoHas"], c.galileoHas);
     }
 
     JsonVariantConst r = d["receiver"];
@@ -267,6 +279,11 @@ bool configFromJson(const String &json, String &err)
     }
 
     // Validation
+    if (c.mode != "rtk" && c.mode != "has")
+    {
+        err = "corrections.mode must be rtk or has";
+        return false;
+    }
     if (c.bt != "spp" && c.bt != "ble" && c.bt != "both" && c.bt != "off")
     {
         err = "outputs.bt must be spp, ble, both or off";

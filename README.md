@@ -177,6 +177,18 @@ The cores exchange data through lock-free single-producer/single-consumer rings 
 | `firmware/web/index.html` | configuration page, embedded at build time by `tools/embed_web.py` |
 | `tools/fake_caster.py` | bench caster with GOOD / STALL / DROP / AUTH mount points for failover tests |
 
+## Correction modes: RTK or Galileo HAS
+
+The **Corrections** switch on the Home page changes the mode at once, without a restart, and the choice is saved.
+
+- **RTK via NTRIP:** corrections from the sources on the Corrections tab, at centimetre level once fixed. With **Galileo HAS fallback** ticked (the default), the receiver falls back to HAS if the corrections stop.
+- **Galileo HAS:** the receiver uses the Galileo High Accuracy Service broadcast on E6, with no internet needed. Expect about 20 cm horizontal after several minutes of convergence.
+  - NTRIP and RTCM from Bluetooth/TCP apps are off in this mode.
+  - Wi-Fi stays on for the web page.
+  - While the HAS solution is active, GGA reports reference station 9002, and the page shows "Galileo HAS".
+
+HAS is set in the receiver with `$PQTMCFGPPP,W,2,1,120,0.10,0.15` (E6 HAS, WGS84, 120 s timeout, converged at 0.10 m horizontal and 0.15 m vertical). It is sent at every start-up and on every mode change; turning the fallback off sends `$PQTMCFGPPP,W,0`. HAS needs LG290P firmware with PPP support. If the receiver answers `$PQTMCFGPPP,ERROR`, which shows in the NMEA live view, update it with QGNSS.
+
 ## Private build with your settings built in
 
 A Pico flashed with a private build starts with your Wi-Fi networks, caster logins and bench position, and does not need the setup access point. Its web page shows "(private build)" next to the version.

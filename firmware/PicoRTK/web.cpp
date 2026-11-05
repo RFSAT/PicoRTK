@@ -52,6 +52,8 @@ static void handleStatus()
     d["lastReset"] = bootReason;
     d["device"] = cfg.deviceName;
     d["privateDefaults"] = configHasPrivateDefaults();
+    d["mode"] = cfg.mode;
+    d["galileoHas"] = cfg.galileoHas;
     d["bluetoothName"] = outputsBtName();
 
     JsonObject w = d["wifi"].to<JsonObject>();
@@ -223,6 +225,28 @@ void webSetup()
             return;
         server.send(200, "text/plain", "Restarting");
         rebootAt = millis() + 1000;
+    });
+    // Switch between RTK (NTRIP) and Galileo HAS without a restart; saved, so it survives power cycles
+    server.on("/api/mode", HTTP_POST, []() {
+        if (!auth())
+            return;
+        String m = server.arg("plain");
+        m.trim();
+        if (m != "rtk" && m != "has")
+        {
+            server.send(400, "text/plain", "Mode must be rtk or has");
+            return;
+        }
+        cfg.mode = m;
+        if (!configSave())
+        {
+            server.send(500, "text/plain", "Could not write the settings to flash");
+            return;
+        }
+        extern void sendHasCommand();
+        sendHasCommand();
+        ntripRestart();
+        server.send(200, "text/plain", m == "has" ? "Galileo HAS mode: NTRIP off. Convergence takes several minutes." : "RTK mode: NTRIP corrections on.");
     });
     server.on("/api/factory", HTTP_POST, []() {
         if (!auth())

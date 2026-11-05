@@ -131,6 +131,12 @@ void ntripSetup()
     sel.setRetryMs(cfg.retryMs);
     sel.setBackoff(cfg.backoffSec, 5);
     sel.setSources(CFG_MAX_SOURCES, valid);
+    if (cfg.mode == "has")
+    {
+        setState(NtripState::Off);
+        event("Galileo HAS mode: NTRIP corrections off");
+        return;
+    }
     setState(sel.validCount() ? NtripState::NoNetwork : NtripState::Off);
     if (state == NtripState::Off)
         event("no correction source configured");
@@ -403,6 +409,13 @@ void ntripStop()
     closeClient();
     event("stopped for shutdown");
     setState(NtripState::Off);
+}
+
+// Correction mode changed at run time: drop any stream and start again under the new mode
+void ntripRestart()
+{
+    closeClient();
+    ntripSetup();
 }
 
 bool ntripStreaming() { return state == NtripState::Streaming; }
