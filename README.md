@@ -199,7 +199,7 @@ HAS is set in the receiver with `$PQTMCFGPPP,W,2,1,120,0.10,0.15` (E6 HAS, WGS84
 
 ### Methods panel, reference point and static-demo hold
 
-The LG290P computes **one** position at a time. It cannot run SBAS and Galileo HAS side by side: once HAS corrections arrive, its GGA carries the HAS solution, converging or not (the protocol has no option to keep SBAS meanwhile). The **Methods** panel on the Home page therefore shows the methods over time:
+The LG290P computes **one** position at a time. It cannot run SBAS and Galileo HAS side by side: once HAS corrections arrive, its GGA carries the HAS solution, converging or not (the protocol has no option to keep SBAS meanwhile). The **Methods** tab therefore shows the methods over time:
 
 - One row per method group: RTK (RTCM), Galileo HAS, SBAS (EGNOS), GNSS only. The running one is marked ●; the others keep their last figures, with how long they ran and how long ago they stopped.
 - **Estimated H · V** is the receiver's own figure (PQTMPPPNAV for HAS, otherwise PQTMEPE or GST). **Actual error H · V** is the distance from the reference point.

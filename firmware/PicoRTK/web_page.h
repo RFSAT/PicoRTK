@@ -78,7 +78,7 @@ pre{margin:0;background:var(--code);color:var(--codeink);font:12.5px/1.5 var(--m
 .methbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin-top:8px}
 .outline{margin:8px 0 0;font-size:13px}
 .outline.hold{color:var(--warn);font-weight:600}
-#trace{width:100%;height:150px;display:block;margin-top:8px}
+#trace{width:100%;height:clamp(150px,32vh,320px);display:block;margin-top:8px}
 #trace text{font:11px var(--sans);fill:var(--muted)}
 .tw{overflow-x:auto}
 .modebar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
@@ -127,6 +127,7 @@ dt[data-help],th[data-help]{text-decoration:underline dotted var(--muted);text-u
 <header><h1>PicoRTK</h1><small id="hdr">connecting…</small></header>
 <nav role="tablist">
 <button data-tab="status" aria-selected="true">Home</button>
+<button data-tab="methods">Methods</button>
 <button data-tab="corr">Corrections</button>
 <button data-tab="net">Wi-Fi &amp; outputs</button>
 <button data-tab="nmea">NMEA</button>
@@ -161,8 +162,11 @@ Dublin, Ireland · Athens, Greece<br>
 <section><h2>Corrections</h2><dl class="kv" id="sNtrip"></dl></section>
 <section><h2>Links</h2><dl class="kv" id="sLinks"></dl></section>
 </div>
+<section><h2>Correction events</h2><pre id="log">…</pre></section>
+</div>
+<div data-page="methods" hidden>
 <section>
-<h2>Methods</h2>
+<h2>Positioning methods</h2>
 <p class="hint" data-help="The LG290P computes one position at a time. When the method changes (RTK, SBAS, Galileo HAS, GNSS only), the stopped method's last figures stay here, marked with how long ago it stopped. Estimated accuracy is the receiver's own figure; actual error is measured against the reference point.">The receiver calculates one method at a time. Rows marked ● are running now; the others show their last figures before they stopped.</p>
 <div class="tw"><table class="meth"><thead><tr><th>Method</th><th>Status</th><th data-help="The receiver's own accuracy estimate, horizontal and vertical (PQTMPPPNAV for Galileo HAS, otherwise PQTMEPE or GST). For a stopped method: its last value.">Estimated H · V</th><th data-help="Distance of the reported position from the reference point, horizontal and vertical. Shown only once a reference point is recorded from an RTK fixed solution.">Actual error H · V</th><th data-help="Best (smallest) horizontal estimate during the latest run of this method.">Best estimate</th><th>Time</th></tr></thead><tbody id="methRows"></tbody></table></div>
 <p class="outline" id="outLine"></p>
@@ -178,7 +182,6 @@ Dublin, Ireland · Athens, Greece<br>
 <svg id="trace" role="img" aria-label="Accuracy over the last 30 minutes"></svg>
 <p class="hint" id="traceNote" style="margin:4px 0 0">Last 30 minutes, one point every 10 s: solid = receiver estimate, dashed = actual error (with a reference point). Background colour = method.</p>
 </section>
-<section><h2>Correction events</h2><pre id="log">…</pre></section>
 </div>
 <div data-page="corr" hidden>
 <section>
@@ -306,6 +309,7 @@ document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
 document.querySelectorAll("nav button").forEach(x=>x.setAttribute("aria-selected",x===b));
 document.querySelectorAll("[data-page]").forEach(p=>p.hidden=p.dataset.page!==b.dataset.tab);
 $("saveBar").hidden=!["corr","net","rx","nmea"].includes(b.dataset.tab);
+if(b.dataset.tab==="methods") drawTrace();
 rxVisible=b.dataset.tab==="rx"; if(rxVisible) repliesPoll();
 nmeaVisible=b.dataset.tab==="nmea"; if(nmeaVisible){nmeaPoll(); if(!readFixRate.done){readFixRate.done=1;readFixRate()}}
 });
@@ -571,11 +575,11 @@ if(cfg){cfg.corrections=cfg.corrections||{};cfg.corrections.holdSbas=!!H.enabled
 $("refNote").textContent=refMsg||(M.ref.set?`Reference: ${M.ref.lat}, ${M.ref.lon}, ${(+M.ref.alt).toFixed(3)} m`:"No reference point: actual errors are not shown.");
 $("refSet").disabled=M.currentCode!==5;
 $("refSet").title=M.currentCode===5?"":"Needs RTK fixed (now: "+M.current+")";
-if(Date.now()-lastTrace>10000){lastTrace=Date.now();drawTrace()}
+if(!$("trace").closest("[data-page]").hidden&&Date.now()-lastTrace>10000){lastTrace=Date.now();drawTrace()}
 }
 async function drawTrace(){
 let d; try{d=await (await fetch("/api/trace")).json()}catch(e){return}
-const svg=$("trace"), W=svg.clientWidth||600, Hh=150, L=44, R=6, T=6, B=18, sm=d.samples||[];
+const svg=$("trace"), W=svg.clientWidth||600, Hh=svg.clientHeight||150, L=44, R=6, T=6, B=18, sm=d.samples||[];
 const span=1800, t0=d.now-span, x=t=>L+(t-t0)/span*(W-L-R);
 const vals=sm.flatMap(p=>[p[2],p[3]]).filter(v=>v>=0);
 const top=Math.max(0.05,...vals)*1.15, lg=top>2, y=v=>T+(1-(lg?Math.log10(v*100+1)/Math.log10(top*100+1):v/top))*(Hh-T-B);
