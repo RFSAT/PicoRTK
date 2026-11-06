@@ -135,6 +135,9 @@ static const uint32_t HIST_RESTART = 0xFFFFFFFFu;
 static const char HIST_CSV_HEADER[] =
     "date_utc,time_utc,uptime_s,method,corrections,correction_age_s,base_or_prn,est_h_m,est_v_m,err_h_m,err_v_m,"
     "lat_deg,lon_deg,alt_msl_m,speed_mps,moving,sats,hdop\r\n";
+// UTC time of a record as seconds since 1970, -1 for a restart marker or a record without a date
+int64_t histEpoch(const HistRec &r);
+
 // One CSV line for a record. Returns its length.
 size_t histCsvLine(const HistRec &r, char *out, size_t outSize);
 // RMC date field ddmmyy -> yyyymmdd (0 when missing)

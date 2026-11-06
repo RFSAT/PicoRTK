@@ -24,8 +24,20 @@ static uint32_t fileRecs(const char *p)
     return n;
 }
 
+static void add(const HistRec &r);
+static void drain()
+{
+    HistRec r;
+    while (histToCore0.available() >= sizeof(HistRec))
+    {
+        histToCore0.read((uint8_t *)&r, sizeof(r));
+        add(r);
+    }
+}
+
 void historyFlush()
 {
+    drain(); // include the records still on their way from core 1 (shutdown, restart, download)
     if (!bufN)
         return;
     if (fileRecs(F_NEW) * sizeof(HistRec) >= HIST_FILE_MAX)
@@ -64,15 +76,9 @@ void historySetup()
 
 void historyLoop()
 {
-    HistRec r;
-    while (histToCore0.available() >= sizeof(HistRec))
-    {
-        diagC0 = 81;
-        histToCore0.read((uint8_t *)&r, sizeof(r));
-        diagC0 = 82;
-        add(r);
-        diagC0 = 83;
-    }
+    diagC0 = 81;
+    drain();
+    diagC0 = 83;
     if (bufN && millis() - lastFlushMs >= FLUSH_MS)
     {
         diagC0 = 84;
@@ -113,6 +119,36 @@ void historyForEach(bool (*fn)(const HistRec &, void *), void *ctx)
     for (int i = 0; i < bufN; i++)
         if (!fn(buf[i], ctx))
             return;
+}
+
+void historyBackward(bool (*fn)(const HistRec &, void *), void *ctx)
+{
+    for (int i = bufN - 1; i >= 0; i--)
+        if (!fn(buf[i], ctx))
+            return;
+    static HistRec chunk[16];
+    for (const char *p : {F_NEW, F_OLD})
+    {
+        uint32_t n = fileRecs(p);
+        if (!n)
+            continue;
+        File f = LittleFS.open(p, "r");
+        while (f && n)
+        {
+            uint32_t k = n < 16 ? n : 16;
+            n -= k;
+            f.seek(n * sizeof(HistRec));
+            if (f.read((uint8_t *)chunk, k * sizeof(HistRec)) != k * sizeof(HistRec))
+                break;
+            for (int i = (int)k - 1; i >= 0; i--)
+                if (!fn(chunk[i], ctx))
+                {
+                    f.close();
+                    return;
+                }
+        }
+        f.close();
+    }
 }
 
 static bool dated(const HistRec &r) { return r.ymd && r.ymd != HIST_RESTART; }

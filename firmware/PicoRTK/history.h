@@ -10,6 +10,8 @@ bool historyClear();
 uint32_t historyRecords();        // in flash + buffered
 uint32_t historyBytes();
 void historyInfo(uint32_t &firstYmd, uint32_t &firstMs, uint32_t &lastYmd, uint32_t &lastMs);
+// Stream records newest first (RAM buffer, then the files from their ends); return false to stop
+void historyBackward(bool (*fn)(const HistRec &, void *), void *ctx);
 // Stream every record, oldest first; return false from the callback to stop
 void historyForEach(bool (*fn)(const HistRec &, void *), void *ctx);
 static const uint32_t HIST_FILE_MAX = 384u * 1024u; // two files: about 30 h at one record every 10 s

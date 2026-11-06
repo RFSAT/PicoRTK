@@ -51,9 +51,8 @@ const char *diagStepName(int core, uint32_t c)
         case 6: return "status";
         case 8: return "history";
         case 9: return "end of main loop";
-        case 81: return "history: reading records";
-        case 82: return "history: buffering";
-        case 83: return "history: next record";
+        case 81: return "history: taking records from core 1";
+        case 83: return "history: records taken";
         case 84: return "history: writing flash";
         case 101: return "start-up: shared data";
         case 102: return "start-up: flash file system";

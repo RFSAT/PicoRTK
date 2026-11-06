@@ -178,8 +178,14 @@ Dublin · Athens · <a href="https://rfsat.com" target="_blank" rel="noopener">r
 <button type="button" class="btn" id="refClear">Clear reference</button>
 <span class="hint" id="refNote" style="margin:0"></span>
 </div>
-<svg id="trace" role="img" aria-label="Accuracy over the last 30 minutes"></svg>
-<p class="hint" id="traceNote" style="margin:4px 0 0">Last 30 minutes, one point every 10 s: solid = receiver estimate, dashed = actual error (with a reference point). Background colour = method.</p>
+<div class="methbar" style="margin-top:10px">
+<strong style="font-size:14px">Accuracy over time</strong>
+<div class="seg" role="group" aria-label="Chart span" id="spanSeg">
+<button type="button" data-span="1800">30 min</button><button type="button" data-span="7200">2 h</button><button type="button" data-span="21600">6 h</button><button type="button" data-span="86400">24 h</button>
+</div>
+</div>
+<svg id="trace" role="img" aria-label="Accuracy over time"></svg>
+<p class="hint" id="traceNote" style="margin:4px 0 0"></p>
 </section>
 <section>
 <h2>History</h2>
@@ -595,24 +601,30 @@ if(cfg){cfg.reference=M.ref.set?{set:true,lat:+M.ref.lat,lon:+M.ref.lon,alt:+M.r
 $("refNote").textContent=refMsg||(M.ref.set?`Reference: ${M.ref.lat}, ${M.ref.lon}, ${(+M.ref.alt).toFixed(3)} m`:"No reference point: actual errors are not shown.");
 $("refSet").disabled=M.currentCode!==5;
 $("refSet").title=M.currentCode===5?"":"Needs RTK fixed (now: "+M.current+")";
-if(!$("trace").closest("[data-page]").hidden){if(Date.now()-lastTrace>10000){lastTrace=Date.now();drawTrace()}if(Date.now()-histAt>30000)histInfo()}
+if(!$("trace").closest("[data-page]").hidden){if(Date.now()-lastTrace>(traceSpan>7200?60000:traceSpan>1800?30000:10000)){lastTrace=Date.now();drawTrace()}if(Date.now()-histAt>30000)histInfo()}
 }
 // Axis label: nice values only, so no two labels can read the same
 const axLab=v=>v===0?"0":v>=1?(+v.toPrecision(3))+" m":(+(v*100).toPrecision(3))+" cm";
+let traceSpan=7200; try{traceSpan=+localStorage.getItem("traceSpan")||7200}catch(e){}
+const markSpan=()=>document.querySelectorAll("#spanSeg button").forEach(b=>b.setAttribute("aria-pressed",+b.dataset.span===traceSpan));
+document.querySelectorAll("#spanSeg button").forEach(b=>b.onclick=()=>{traceSpan=+b.dataset.span;try{localStorage.setItem("traceSpan",traceSpan)}catch(e){};markSpan();drawTrace()});
+markSpan();
+const hhmm=t=>new Date(t*1000).toISOString().slice(11,16);
 async function drawTrace(){
-let d; try{d=await (await fetch("/api/trace")).json()}catch(e){return}
+let d; try{d=await (await fetch("/api/trace?span="+traceSpan)).json()}catch(e){return}
+lastTrace=Date.now();
+const utc=d.mode==="utc", span=utc?traceSpan:1800;
 const svg=$("trace"), W=svg.clientWidth||600, Hh=svg.clientHeight||150, L=50, R=6, T=6, B=18, sm=d.samples||[];
-const span=1800, t0=d.now-span, x=t=>L+(t-t0)/span*(W-L-R), ph=Hh-T-B;
+const t0=d.now-span, x=t=>L+(t-t0)/span*(W-L-R), ph=Hh-T-B, gapS=3*(d.step||10);
 const vals=sm.flatMap(p=>[p[2],p[3]]).filter(v=>v>0);
 const hi=Math.max(0.05,...vals), lo=vals.length?Math.min(...vals):hi;
 // Logarithmic when the values span more than a factor of 20 (e.g. RTK centimetres and SBAS metres), else linear from 0
 const lg=hi/lo>20;
 let y, ticks=[];
 if(lg){
-const a=Math.floor(Math.log10(lo)), b=Math.ceil(Math.log10(hi*1.05)), la=Math.log10(10**a), lb=Math.log10(10**b);
-y=v=>T+(1-(Math.log10(Math.max(v,10**a))-la)/(lb-la))*ph;
+const a=Math.floor(Math.log10(lo)), b=Math.ceil(Math.log10(hi*1.05));
+y=v=>T+(1-(Math.log10(Math.max(v,10**a))-a)/(b-a))*ph;
 for(let e=a;e<=b;e++)for(const m of [1,2,5]){const v=m*10**e;if(v<=10**b)ticks.push({v,major:m===1})}
-// label the 2 and 5 lines only when a decade is tall enough
 const dec=ph/(b-a); ticks.forEach(t=>t.label=t.major||dec>=60);
 }else{
 const top=hi*1.1, raw=top/5, p10=10**Math.floor(Math.log10(raw)), step=[1,2,5,10].map(m=>m*p10).find(s=>s>=raw);
@@ -621,19 +633,27 @@ y=v=>T+(1-v/max)*ph;
 for(let v=0;v<=max+step/2;v+=step)ticks.push({v:+v.toPrecision(6),major:true,label:true});
 }
 let g="";
-for(let i=0;i<sm.length;i++){const a=sm[i],b=sm[i+1],xa=x(a[0]),xb=b?x(b[0]):x(d.now);if(xb>L)g+=`<rect x="${Math.max(L,xa)}" y="${T}" width="${Math.max(0,xb-Math.max(L,xa))}" height="${ph}" fill="${METHCOL[a[1]]}" opacity=".16"><title>${METHNAME[a[1]]}</title></rect>`}
+// method background, only between samples that follow each other (a longer gap = off or restarting)
+for(let i=0;i<sm.length;i++){const a=sm[i],b=sm[i+1];const xa=Math.max(L,x(a[0])),xb=b&&b[0]-a[0]<=gapS?x(b[0]):Math.min(x(a[0]+(d.step||10)),W-R);
+if(xb>L&&xb>xa)g+=`<rect x="${xa}" y="${T}" width="${xb-xa}" height="${ph}" fill="${METHCOL[a[1]]}" opacity=".16"><title>${METHNAME[a[1]]}${utc?" · "+hhmm(a[0])+" UTC":""}</title></rect>`;
+if(b&&b[0]-a[0]>gapS){const xg=x(a[0]+(d.step||10)),xe=x(b[0]);if(xe>L)g+=`<rect x="${Math.max(L,xg)}" y="${T}" width="${Math.max(0,xe-Math.max(L,xg))}" height="${ph}" fill="url(#gapHatch)"><title>no data ${hhmm(a[0])}–${hhmm(b[0])} UTC (off or restarting)</title></rect>`}}
 for(const t of ticks){const yy=y(t.v).toFixed(1);
-g+=`<line x1="${L}" x2="${W-R}" y1="${yy}" y2="${yy}" stroke="#9aa5a3" stroke-opacity="${t.major?.55:.28}" stroke-width="1"/>`;
+g+=`<line x1="${L}" x2="${W-R}" y1="${yy}" y2="${yy}" stroke="#9aa5a3" stroke-opacity="${t.major?.55:.28}"/>`;
 if(t.label)g+=`<text x="${L-5}" y="${+yy+4}" text-anchor="end">${axLab(t.v)}</text>`}
-for(const m of [30,20,10,0]){const xx=x(d.now-m*60);g+=`<line x1="${xx}" x2="${xx}" y1="${T}" y2="${T+ph}" stroke="#9aa5a3" stroke-opacity=".28"/><text x="${xx}" y="${Hh-4}" text-anchor="${m?"middle":"end"}">${m?"−"+m+" min":"now"}</text>`}
+// time axis: clock times (UTC) at round minutes, or minutes back when there is no date yet
+const tstep={1800:300,7200:1200,21600:3600,86400:14400}[span]||300;
+for(let t=Math.ceil(t0/tstep)*tstep;t<=d.now;t+=tstep){const xx=x(t);if(xx<L+20||xx>W-R-30)continue;
+g+=`<line x1="${xx}" x2="${xx}" y1="${T}" y2="${T+ph}" stroke="#9aa5a3" stroke-opacity=".28"/><text x="${xx}" y="${Hh-4}" text-anchor="middle">${utc?hhmm(t):"−"+Math.round((d.now-t)/60)+" min"}</text>`}
+g+=`<text x="${W-R}" y="${Hh-4}" text-anchor="end">${utc?hhmm(d.now)+" UTC":"now"}</text>`;
 g+=`<rect x="${L}" y="${T}" width="${W-L-R}" height="${ph}" fill="none" stroke="var(--line)"/>`;
-const line=(k,dash)=>{let p="",pen=false;for(const s of sm){if(s[k]<=0){pen=false;continue}p+=(pen?"L":"M")+x(s[0]).toFixed(1)+" "+y(s[k]).toFixed(1);pen=true}return p?`<path d="${p}" fill="none" stroke="var(--ink)" stroke-width="1.6"${dash?' stroke-dasharray="5 3"':""}/>`:""};
+const line=(k,dash)=>{let p="",prev=null;for(const s of sm){if(s[k]<=0||s[0]<t0){prev=null;continue}p+=(prev!==null&&s[0]-prev<=gapS?"L":"M")+x(s[0]).toFixed(1)+" "+y(s[k]).toFixed(1);prev=s[0]}return p?`<path d="${p}" fill="none" stroke="var(--ink)" stroke-width="1.6"${dash?' stroke-dasharray="5 3"':""}/>`:""};
 g+=line(2,false)+line(3,true);
-svg.setAttribute("viewBox",`0 0 ${W} ${Hh}`);svg.innerHTML=g;
-const hasErr=sm.some(p=>p[3]>0), seen=[...new Set(sm.map(p=>p[1]))];
+svg.setAttribute("viewBox",`0 0 ${W} ${Hh}`);
+svg.innerHTML=`<defs><pattern id="gapHatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#9aa5a3" stroke-opacity=".35" stroke-width="2"/></pattern></defs>`+g;
+const hasErr=sm.some(p=>p[3]>0), seen=[...new Set(sm.filter(p=>p[0]>=t0).map(p=>p[1]))];
 const sw=d=>`<svg width="26" height="8" style="vertical-align:middle"><line x1="1" x2="25" y1="4" y2="4" stroke="currentColor" stroke-width="1.6"${d?' stroke-dasharray="5 3"':""}/></svg>`;
-$("traceNote").innerHTML=`Last 30 minutes, one point every 10 s, ${lg?"logarithmic":"linear"} scale. ${sw(0)} estimated accuracy (the receiver's own figure) · ${sw(1)} actual error against the reference point`+
-(hasErr?"":" (appears once a reference point is set)")+`.<br>Background: `+seen.map(m=>`<span style="color:${METHCOL[m]}">■</span> ${METHNAME[m]}`).join(" · ");
+$("traceNote").innerHTML=(utc?`From the stored history, one point every ${d.step} s, times in UTC, `:"Since this start-up (no date from the receiver yet), one point every 10 s, ")+`${lg?"logarithmic":"linear"} scale. ${sw(0)} estimated accuracy (the receiver's own figure) · ${sw(1)} actual error against the reference point`+
+(hasErr?"":" (appears once a reference point is set)")+`. Hatched: no data (off or restarting).<br>Background: `+seen.map(m=>`<span style="color:${METHCOL[m]}">■</span> ${METHNAME[m]}`).join(" · ");
 }
 let refMsg="";
 const ymdS=(y,ms)=>y?`${String(y).slice(0,4)}-${String(y).slice(4,6)}-${String(y).slice(6,8)} ${new Date(ms).toISOString().slice(11,19)} UTC`:"–";

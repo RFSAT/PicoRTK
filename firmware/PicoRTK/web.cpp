@@ -369,31 +369,88 @@ void webSetup()
         server.send(200, "text/plain", r.set ? "Reference point recorded at the current position." : "Reference point cleared.");
     });
     // Accuracy trace: last 30 min, one sample every 10 s: [uptime s, method code, estimate H, error H] (-1 = none)
+    // Accuracy chart. From the flash history (so it survives restarts), on UTC time:
+    // ?span=seconds (600..86400, default 1800). At most 720 points: every k-th record for long spans.
+    // samples: [utc s, method code, estimate H, error H] (-1 = none), oldest first.
+    // While no record has a date yet (no fix since the history began), it sends this run's uptime
+    // samples instead, with "mode":"uptime".
     server.on("/api/trace", HTTP_GET, []() {
         if (!auth())
             return;
-        static MethodTracker mt;
-        RefPoint rp;
-        getMethods(mt, rp);
-        String js;
-        js.reserve(TRACE_N * 28 + 64);
-        js = "{\"now\":" + String(millis() / 1000) + ",\"step\":" + String(TRACE_STEP_MS / 1000) + ",\"samples\":[";
-        for (int i = 0; i < mt.traceCount(); i++)
+        long span = server.hasArg("span") ? server.arg("span").toInt() : 1800;
+        span = span < 600 ? 600 : span > 86400 ? 86400 : span;
+        struct Pt
         {
-            const TraceSample &t = mt.trace(i);
-            if (i)
+            int64_t t;
+            uint8_t m;
+            float e, r;
+        };
+        static Pt pts[720];
+        struct Ctx
+        {
+            int64_t now = -1, span = 1800;
+            uint32_t k = 1, count = 0;
+            int n = 0;
+        } c;
+        c.span = span;
+        c.k = (uint32_t)((span / 10 + 719) / 720);
+        historyBackward(
+            [](const HistRec &r, void *p) -> bool {
+                Ctx *x = (Ctx *)p;
+                const int64_t t = histEpoch(r);
+                if (t < 0)
+                    return true; // restart marker or no date yet: the time gap shows it
+                if (x->now < 0)
+                    x->now = t;
+                if (t < x->now - x->span || x->n >= 720)
+                    return false;
+                if (x->count++ % x->k == 0)
+                    pts[x->n++] = Pt{t, r.method, r.estH, r.errH};
+                return true;
+            },
+            &c);
+        String js;
+        js.reserve(c.n * 34 + 96);
+        if (c.now >= 0)
+        {
+            js = "{\"mode\":\"utc\",\"now\":" + String((long)c.now) + ",\"span\":" + String(span) + ",\"step\":" + String(10 * c.k) +
+                 ",\"samples\":[";
+            for (int i = c.n - 1; i >= 0; i--) // oldest first
+            {
+                js += '[';
+                js += String((long)pts[i].t);
                 js += ',';
-            js += '[';
-            js += String(t.tSec);
-            js += ',';
-            js += String(t.method);
-            js += ',';
-            js += String(t.estH, 3);
-            js += ',';
-            js += String(t.errH, 3);
-            js += ']';
+                js += String(pts[i].m);
+                js += ',';
+                js += String(pts[i].e, 3);
+                js += ',';
+                js += String(pts[i].r, 3);
+                js += i ? "]," : "]";
+            }
+            js += "]}";
         }
-        js += "]}";
+        else
+        {
+            static MethodTracker mt;
+            RefPoint rp;
+            getMethods(mt, rp);
+            js = "{\"mode\":\"uptime\",\"now\":" + String(millis() / 1000) + ",\"span\":1800,\"step\":" + String(TRACE_STEP_MS / 1000) +
+                 ",\"samples\":[";
+            for (int i = 0; i < mt.traceCount(); i++)
+            {
+                const TraceSample &t = mt.trace(i);
+                js += i ? ",[" : "[";
+                js += String(t.tSec);
+                js += ',';
+                js += String(t.method);
+                js += ',';
+                js += String(t.estH, 3);
+                js += ',';
+                js += String(t.errH, 3);
+                js += ']';
+            }
+            js += "]}";
+        }
         server.sendHeader("Cache-Control", "no-store");
         server.send(200, "application/json", js);
     });

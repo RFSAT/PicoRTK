@@ -204,7 +204,7 @@ The LG290P computes **one** position at a time. It cannot run SBAS and Galileo H
 - One row per method group: RTK (RTCM), Galileo HAS, SBAS (EGNOS), GNSS only. The running one is marked ●; the others keep their last figures, with how long they ran and how long ago they stopped.
 - **Estimated H · V** is the receiver's own figure (PQTMPPPNAV for HAS, otherwise PQTMEPE or GST). **Actual error H · V** is the distance from the reference point.
 - **Reference point:** press *Set reference from RTK fix* while the receiver has RTK fixed (the button is disabled otherwise), then leave the antenna where it is. It is saved; *Clear reference* removes it. The API also accepts `force` for a point taken from any fix (`POST /api/ref` with `set`, `force` or `clear`).
-- **Trace:** the last 30 minutes, one sample every 10 s, estimate (solid) and actual error (dashed) on a background coloured by method (`GET /api/trace`).
+- **Accuracy over time:** drawn from the stored history, so it survives restarts and firmware updates. Spans of 30 min, 2 h (default), 6 h or 24 h, on UTC clock time; estimate (solid) and actual error (dashed) on a background coloured by method, hatched where there is no data (off or restarting). Long spans are thinned to at most 720 points (`GET /api/trace?span=seconds`). Until the receiver has given a date, it shows this start-up's samples instead.
 - **Corrections** for each method: RTK and DGNSS show the base station, the age of the corrections and whether they are **live** (RTCM reached the receiver in the last 5 s) or **stale** (RTCM has stopped; the receiver keeps using the last data for up to about 2 minutes by default, `PQTMCFGRTK` timeout). HAS shows the age of its E6 corrections, SBAS the EGNOS satellite (PRN). The Home page says "RTK fixed (stale corrections)" in that case.
 - **Speed and movement** from RMC: moving above 0.5 m/s for 3 s, stationary below 0.3 m/s for 10 s, so a stop at traffic lights does not flip it.
 - Positions go to the apps **exactly as the receiver computes them**: nothing is held or replaced, so tests show real behaviour. The switching between methods is the receiver's own.
@@ -214,7 +214,7 @@ The LG290P computes **one** position at a time. It cannot run SBAS and Galileo H
 The Methods tab also keeps a **history**: one record every 10 s with the UTC date and time, uptime, method, corrections (live / stale / none), correction age, base station or EGNOS PRN, estimated and actual error, position, speed, moving, satellites and HDOP.
 
 - Stored in the Pico's flash (`/hist2a.bin`, `/hist2b.bin`, 72 bytes a record, up to 768 KB, about 30 hours). History in the earlier format is deleted when this version starts. When full, the oldest records go first.
-- Written every 5 minutes and at *Shut down* / restart from the page, so pulling the power loses at most the last 5 minutes. Each start-up adds a `restart` line.
+- Written every 5 minutes and at *Shut down* / restart from the page (including the records still on their way from core 1), so pulling the power loses at most the last 5 minutes. Each start-up adds a `restart` line.
 - **Download CSV** (`GET /api/history.csv`) sends everything, oldest first. While it is sent (a few seconds), the correction stream and Bluetooth/TCP pause. **Clear history** (`POST /api/history/clear`) deletes it. `GET /api/history` returns the record count and time span.
 - Flashing a new UF2 keeps the history, like the settings.
 

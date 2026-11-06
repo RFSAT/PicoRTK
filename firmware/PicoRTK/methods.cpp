@@ -252,6 +252,21 @@ size_t histCsvLine(const HistRec &r, char *out, size_t n)
                             r.speed < 0 ? "" : (r.flags & HF_MOVING) ? "yes" : "no", r.sats, r.hdop);
 }
 
+int64_t histEpoch(const HistRec &r)
+{
+    if (!r.ymd || r.ymd == HIST_RESTART)
+        return -1;
+    // days from civil date (Howard Hinnant's algorithm)
+    int y = (int)(r.ymd / 10000), m = (int)(r.ymd / 100 % 100), d = (int)(r.ymd % 100);
+    y -= m <= 2;
+    const int era = (y >= 0 ? y : y - 399) / 400;
+    const unsigned yoe = (unsigned)(y - era * 400);
+    const unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+    const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    const int64_t days = (int64_t)era * 146097 + (int64_t)doe - 719468;
+    return days * 86400 + r.utcMs / 1000;
+}
+
 uint32_t rmcDate(const char *s, size_t len)
 {
     // field 9 of $xxRMC

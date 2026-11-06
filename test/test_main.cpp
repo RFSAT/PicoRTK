@@ -417,6 +417,16 @@ static void testHistory()
     for (const char *p = line; *p; p++) cb += *p == ',';
     CHECK(ch == cl && ch == cb && ch == 17);
     CHECK(sizeof(HistRec) == 72);
+    HistRec e{}; e.ymd = 20261106; e.utcMs = 43200500;
+    CHECK(histEpoch(e) == 1793966400LL); // 2026-11-06 12:00:00 UTC (calendar.timegm)
+    e.ymd = 19700101; e.utcMs = 0;
+    CHECK(histEpoch(e) == 0);
+    e.ymd = 20240229; e.utcMs = 86399000;
+    CHECK(histEpoch(e) == 1709251199LL);
+    e.ymd = 0;
+    CHECK(histEpoch(e) == -1);
+    e.ymd = HIST_RESTART;
+    CHECK(histEpoch(e) == -1);
 }
 
 int main()
