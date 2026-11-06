@@ -64,6 +64,10 @@ void getAccuracy(SharedAccuracy &out);
 // Positioning methods seen over time, their corrections, reference point, movement (core 1 writes, core 0 reads)
 #include "methods.h"
 void getMethods(MethodTracker &out, RefPoint &ref);
+// Satellites in view (GSV) and used (GSA), for the Sky tab (core 1 writes, core 0 copies)
+#include "sky.h"
+void getSky(SkyTable &out);
+
 // core 1 -> core 0: one HistRec every 10 s for the flash history
 extern SpscRing<8192> histToCore0;
 void setRefPoint(const RefPoint &r); // also call configSave() after updating cfg

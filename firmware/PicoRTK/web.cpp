@@ -454,6 +454,44 @@ void webSetup()
         server.sendHeader("Cache-Control", "no-store");
         server.send(200, "application/json", js);
     });
+    // Satellites in view: position, C/N0 for every signal (band name), used in the solution
+    server.on("/api/sky", HTTP_GET, []() {
+        if (!auth())
+            return;
+        static SkyTable t;
+        getSky(t);
+        const uint32_t now = millis();
+        String js;
+        js.reserve(4096);
+        js = "{\"gsvAgeMs\":" + String(t.lastGsvMs() ? (long)(now - t.lastGsvMs()) : -1) +
+             ",\"gsaAgeMs\":" + String(t.lastGsaMs() ? (long)(now - t.lastGsaMs()) : -1) + ",\"sats\":[";
+        bool first = true;
+        for (int i = 0; i < t.count(); i++)
+        {
+            const SkySat &x = t.at(i);
+            if (!x.sys)
+                continue;
+            js += first ? "{\"s\":\"" : ",{\"s\":\"";
+            first = false;
+            js += x.sys;
+            js += "\",\"p\":" + String(x.prn) + ",\"el\":" + String(x.el) + ",\"az\":" + String(x.az) + ",\"u\":" +
+                  (SkyTable::used(x, now) ? "1" : "0") + ",\"sig\":[";
+            bool fs = true;
+            for (const SkySig &g : x.sig)
+            {
+                if (!g.id)
+                    continue;
+                js += fs ? "[\"" : ",[\"";
+                fs = false;
+                js += skyBandName(x.sys, g.id);
+                js += "\"," + String(g.cn0) + "," + String(skyBandOrder(x.sys, g.id)) + "]";
+            }
+            js += "]}";
+        }
+        js += "]}";
+        server.sendHeader("Cache-Control", "no-store");
+        server.send(200, "application/json", js);
+    });
     // Positioning history kept in flash across restarts
     server.on("/api/history", HTTP_GET, []() {
         if (!auth())

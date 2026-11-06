@@ -22,7 +22,7 @@ jobs:
       - name: Host unit tests
         run: |
           g++ -std=c++17 -Wall -Wextra -Ifirmware/PicoRTK test/test_main.cpp \
-            firmware/PicoRTK/nmea.cpp firmware/PicoRTK/rtcm.cpp firmware/PicoRTK/selector.cpp firmware/PicoRTK/methods.cpp firmware/PicoRTK/ntrip_proto.cpp -o /tmp/t
+            firmware/PicoRTK/nmea.cpp firmware/PicoRTK/rtcm.cpp firmware/PicoRTK/selector.cpp firmware/PicoRTK/methods.cpp firmware/PicoRTK/sky.cpp firmware/PicoRTK/ntrip_proto.cpp -o /tmp/t
           /tmp/t
 
       - name: Protocol test against the fake caster

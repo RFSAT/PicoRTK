@@ -2,6 +2,7 @@
 // Host unit tests for the portable PicoRTK modules.
 // Build: g++ -std=c++17 -Wall -I../firmware/PicoRTK test_main.cpp ../firmware/PicoRTK/{nmea,rtcm,selector,ntrip_proto,methods}.cpp -o t && ./t
 #include "methods.h"
+#include "sky.h"
 #include "nmea.h"
 #include "ntrip_proto.h"
 #include "ring.h"
@@ -429,8 +430,64 @@ static void testHistory()
     CHECK(histEpoch(e) == -1);
 }
 
+static void testSky()
+{
+    SkyTable t;
+    uint32_t now = 1000;
+    auto feed = [&](const char *body) { std::string x = withChecksum(body); return t.feed(x.c_str(), x.size(), now); };
+    // the spec's examples: GPS L1, L2C, L5 for the same satellites; GLONASS G1 and G2
+    CHECK(feed("$GPGSV,2,1,05,10,77,300,36,12,40,082,31,23,58,153,35,25,46,137,33,1"));
+    feed("$GPGSV,2,2,05,32,45,316,34,1");
+    feed("$GPGSV,2,1,05,10,77,300,31,12,40,082,25,23,58,153,29,25,46,137,28,6");
+    feed("$GPGSV,1,1,04,10,77,300,32,23,58,153,30,25,46,137,30,32,45,316,26,8");
+    feed("$GLGSV,1,1,03,67,57,036,37,68,30,328,34,78,53,184,27,1");
+    feed("$GAGSV,1,1,02,05,40,120,41,12,20,250,,5"); // E6: one tracked, one not
+    feed("$GBGSV,1,1,01,23,60,100,44,B");               // BDS B2I (hex signal ID)
+    feed("$GPGSV,1,1,01,36,45,180,40,1");               // GPS-talker ID 36 = SBAS PRN 123
+    CHECK(!feed("$GNGGA,120000.00,,,,,0,00,,,M,,M,,"));
+    const SkySat *g10 = nullptr, *r3 = nullptr, *e5 = nullptr, *e12 = nullptr, *c23 = nullptr, *s123 = nullptr;
+    int nSats = 0;
+    for (int i = 0; i < t.count(); i++)
+    {
+        const SkySat &x = t.at(i);
+        if (!x.sys) continue;
+        nSats++;
+        if (x.sys == 'G' && x.prn == 10) g10 = &x;
+        if (x.sys == 'R' && x.prn == 3) r3 = &x;
+        if (x.sys == 'E' && x.prn == 5) e5 = &x;
+        if (x.sys == 'E' && x.prn == 12) e12 = &x;
+        if (x.sys == 'C' && x.prn == 23) c23 = &x;
+        if (x.sys == 'S' && x.prn == 123) s123 = &x;
+    }
+    CHECK(nSats == 5 + 3 + 2 + 1 + 1);
+    CHECK(g10 && g10->el == 77 && g10->az == 300);
+    int l1 = 0, l2 = 0, l5 = 0;
+    for (auto &g : g10->sig) { if (g.id == 1) l1 = g.cn0; if (g.id == 6) l2 = g.cn0; if (g.id == 8) l5 = g.cn0; }
+    CHECK(l1 == 36 && l2 == 31 && l5 == 32);
+    CHECK(r3 && r3->el == 57);                 // GLONASS 67 -> slot 3
+    CHECK(e5 && e5->sig[0].id == 5 && e5->sig[0].cn0 == 41);
+    CHECK(e12 && e12->sig[0].cn0 == 0);        // in view, E6 not tracked
+    CHECK(c23 && c23->sig[0].id == 11);
+    CHECK(s123 && s123->el == 45);
+    CHECK(!strcmp(skyBandName('E', 5), "E6") && !strcmp(skyBandName('C', 11), "B2I") && !strcmp(skyBandName('R', 3), "G2"));
+    CHECK(skyBandOrder('E', 7) < skyBandOrder('E', 5) && skyBandOrder('E', 5) < skyBandOrder('E', 1));
+    // used in the solution (GSA with system ID)
+    CHECK(feed("$GNGSA,A,3,10,23,,,,,,,,,,,1.2,0.7,1.0,1"));
+    feed("$GNGSA,A,3,05,,,,,,,,,,,,1.2,0.7,1.0,3");
+    CHECK(SkyTable::used(*g10, now) && SkyTable::used(*e5, now) && !SkyTable::used(*e12, now));
+    CHECK(!SkyTable::used(*g10, now + 4000));
+    // expiry
+    now += 6000;
+    feed("$GAGSV,1,1,01,05,41,121,40,7");
+    t.expire(now);
+    nSats = 0;
+    for (int i = 0; i < t.count(); i++) if (t.at(i).sys) nSats++;
+    CHECK(nSats == 1);
+}
+
 int main()
 {
+    testSky();
     testHistory();
     testMethods();
     testNmea();

@@ -80,6 +80,16 @@ pre{margin:0;background:var(--code);color:var(--codeink);font:12.5px/1.5 var(--m
 .meth tr.off td{color:var(--muted)}
 .kv.warn dd{color:var(--warn);font-weight:600}
 #restartInfo dd{white-space:normal;overflow:visible}
+.skygrid{display:grid;grid-template-columns:minmax(260px,420px) minmax(0,1fr);gap:16px 28px;align-items:start}
+@media (max-width:760px){.skygrid{grid-template-columns:1fr}}
+#skyPlot{width:100%;max-width:420px;display:block}
+#skyPlot text,#sigBars text{font:11px var(--sans);fill:var(--muted)}
+#skyPlot text.sat{fill:var(--ink);font-size:10px}
+#sigBars{height:210px;display:block}
+.skylegend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;margin-bottom:6px}
+.skylegend span i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+h3.sub{font:600 13px var(--sans);margin:12px 0 4px}
+tr.e6 td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
 .methbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin-top:8px}
 .outline{margin:8px 0 0;font-size:13px}
 .stale{color:var(--warn);font-weight:600}
@@ -133,6 +143,7 @@ dt[data-help],th[data-help]{text-decoration:underline dotted var(--muted);text-u
 <nav role="tablist">
 <button data-tab="status" aria-selected="true">Home</button>
 <button data-tab="methods">Methods</button>
+<button data-tab="sky">Sky</button>
 <button data-tab="corr">Corrections</button>
 <button data-tab="net">Wi-Fi &amp; outputs</button>
 <button data-tab="nmea">NMEA</button>
@@ -196,6 +207,24 @@ Dublin · Athens · <a href="https://rfsat.com" target="_blank" rel="noopener">r
 <button type="button" class="btn" id="histClear">Clear history</button>
 <span class="hint" id="histNote" style="margin:0"></span>
 </div>
+</section>
+</div>
+<div data-page="sky" hidden>
+<section>
+<h2>Sky and signals</h2>
+<p class="hint" id="skyNote">Satellites in view from the receiver's GSV messages, and those used in the position from GSA.</p>
+<div class="skygrid">
+<svg id="skyPlot" viewBox="0 0 400 400" role="img" aria-label="Sky plot"></svg>
+<div>
+<div id="skyLegend" class="skylegend"></div>
+<h3 class="sub" data-help="For each band: how many satellites of that system are tracked on it (C/N0 reported) out of those in view, and their mean and best C/N0. Galileo HAS is sent on E6, so the receiver needs E6 signals to use it.">Bands</h3>
+<div class="tw"><table class="meth" id="bandTable"></table></div>
+<p class="hint" id="e6Note" style="margin:6px 0 0"></p>
+</div>
+</div>
+<h3 class="sub" data-help="C/N0 (carrier-to-noise density) of every signal, in dB-Hz: above about 40 is strong, 30-40 usable, below 30 weak. Bars of one satellite are its bands, from the highest frequency (left) down. Faded: the satellite is not used in the position.">Signal strength (C/N0)</h3>
+<div class="tw"><svg id="sigBars" role="img" aria-label="Signal strength per satellite and band"></svg></div>
+<p class="hint" style="margin:4px 0 0">One group per satellite, one bar per band (darkest = highest frequency, e.g. L1/E1/B1). Faded groups are not used in the position. Hover for values.</p>
 </section>
 </div>
 <div data-page="corr" hidden>
@@ -316,7 +345,7 @@ Dublin · Athens · <a href="https://rfsat.com" target="_blank" rel="noopener">r
 <div id="tip" role="tooltip" hidden></div>
 <script>
 const $=id=>document.getElementById(id);
-let curMode="rtk", rxVisible=false;
+let curMode="rtk", rxVisible=false, skyVisible=false;
 async function repliesPoll(once){
 if(!rxVisible&&!once) return;
 try{const d=await (await fetch("/api/nmea")).json();const r=d.replies||[];if(r.length){const el=$("rxReplies");el.textContent=r.join("\n");el.scrollTop=el.scrollHeight}}catch(e){}
@@ -330,6 +359,7 @@ document.querySelectorAll("nav button").forEach(x=>x.setAttribute("aria-selected
 document.querySelectorAll("[data-page]").forEach(p=>p.hidden=p.dataset.page!==b.dataset.tab);
 $("saveBar").hidden=!["corr","net","rx","nmea"].includes(b.dataset.tab);
 if(b.dataset.tab==="methods"){drawTrace();histInfo()}
+skyVisible=b.dataset.tab==="sky"; if(skyVisible) skyPoll();
 rxVisible=b.dataset.tab==="rx"; if(rxVisible) repliesPoll();
 nmeaVisible=b.dataset.tab==="nmea"; if(nmeaVisible){nmeaPoll(); if(!readFixRate.done){readFixRate.done=1;readFixRate()}}
 });
@@ -654,6 +684,57 @@ const hasErr=sm.some(p=>p[3]>0), seen=[...new Set(sm.filter(p=>p[0]>=t0).map(p=>
 const sw=d=>`<svg width="26" height="8" style="vertical-align:middle"><line x1="1" x2="25" y1="4" y2="4" stroke="currentColor" stroke-width="1.6"${d?' stroke-dasharray="5 3"':""}/></svg>`;
 $("traceNote").innerHTML=(utc?`From the stored history, one point every ${d.step} s, times in UTC, `:"Since this start-up (no date from the receiver yet), one point every 10 s, ")+`${lg?"logarithmic":"linear"} scale. ${sw(0)} estimated accuracy (the receiver's own figure) · ${sw(1)} actual error against the reference point`+
 (hasErr?"":" (appears once a reference point is set)")+`. Hatched: no data (off or restarting).<br>Background: `+seen.map(m=>`<span style="color:${METHCOL[m]}">■</span> ${METHNAME[m]}`).join(" · ");
+}
+// ---- Sky tab (colours as in PocketGNSS) ----
+const SYS={G:["GPS","#1E88E5"],R:["GLONASS","#E53935"],E:["Galileo","#3949AB"],C:["BeiDou","#FB8C00"],J:["QZSS","#8E24AA"],I:["NavIC","#00897B"],S:["SBAS","#6D4C41"]};
+const SYSORD="GRECJIS";
+const satLab=x=>x.s+String(x.p).padStart(2,"0");
+async function skyPoll(){
+if(!skyVisible) return;
+try{drawSky(await (await fetch("/api/sky")).json())}catch(e){}
+setTimeout(skyPoll,2000);
+}
+function drawSky(d){
+const sats=(d.sats||[]).slice().sort((a,b)=>SYSORD.indexOf(a.s)-SYSORD.indexOf(b.s)||a.p-b.p);
+const noGsv=d.gsvAgeMs<0||d.gsvAgeMs>5000;
+$("skyNote").innerHTML=noGsv?`<span class="stale">No GSV from the receiver${d.gsvAgeMs>0?" for "+Math.round(d.gsvAgeMs/1000)+" s":""}.</span> Switch GSV (and GSA) on in the NMEA tab and apply it to the receiver.`
+:`${sats.length} satellites in view, ${sats.filter(x=>x.u).length} used in the position`+(d.gsaAgeMs<0||d.gsaAgeMs>5000?" (no GSA: used satellites unknown)":"")+".";
+// sky plot: zenith in the centre, horizon on the outer ring, north up
+const C=200,Rr=170; let g="";
+for(const e of [0,30,60]){const r=Rr*(90-e)/90;g+=`<circle cx="${C}" cy="${C}" r="${r}" fill="none" stroke="#9aa5a3" stroke-opacity=".5"/><text x="${(C+r*0.7071+3).toFixed(1)}" y="${(C+r*0.7071+11).toFixed(1)}" style="font-size:10px">${e}°</text>`}
+g+=`<line x1="${C-Rr}" x2="${C+Rr}" y1="${C}" y2="${C}" stroke="#9aa5a3" stroke-opacity=".4"/><line x1="${C}" x2="${C}" y1="${C-Rr}" y2="${C+Rr}" stroke="#9aa5a3" stroke-opacity=".4"/>`;
+g+=`<text x="${C}" y="${C-Rr-8}" text-anchor="middle">N</text><text x="${C}" y="${C+Rr+18}" text-anchor="middle">S</text><text x="${C+Rr+10}" y="${C+4}" text-anchor="middle">E</text><text x="${C-Rr-10}" y="${C+4}" text-anchor="middle">W</text>`;
+for(const x of sats){if(x.el<0||x.az<0)continue;
+const r=Rr*(90-x.el)/90,a=x.az*Math.PI/180,px=C+r*Math.sin(a),py=C-r*Math.cos(a),col=(SYS[x.s]||["?","#9E9E9E"])[1];
+const tracked=x.sig.filter(q=>q[1]>0),multi=tracked.length>1;
+const tip=`${satLab(x)} · elevation ${x.el}°, azimuth ${x.az}° · ${x.u?"used":"not used"}`+(tracked.length?" · "+tracked.map(q=>q[0]+" "+q[1]).join(", ")+" dB-Hz":" · no signal tracked");
+g+=`<g><title>${tip}</title>`+(x.u?`<circle cx="${px}" cy="${py}" r="7" fill="${col}"/>`:`<circle cx="${px}" cy="${py}" r="6" fill="var(--panel)" stroke="${col}" stroke-width="2.5"/>`)+
+(multi?`<circle cx="${px}" cy="${py}" r="10.5" fill="none" stroke="${col}" stroke-width="1.2"/>`:"")+`<text class="sat" x="${px}" y="${py-13}" text-anchor="middle">${satLab(x)}</text></g>`}
+$("skyPlot").innerHTML=g;
+// legend: used / in view per system
+const by={};for(const x of sats)(by[x.s]=by[x.s]||[]).push(x);
+$("skyLegend").innerHTML=Object.keys(by).map(k=>`<span><i style="background:${SYS[k][1]}"></i>${SYS[k][0]} ${by[k].filter(x=>x.u).length}/${by[k].length}</span>`).join("")+
+`<span style="color:var(--muted)">filled = used · ring = not used · outer ring = more than one band</span>`;
+// bands summary
+const bands={};
+for(const x of sats)for(const q of x.sig){const k=x.s+"|"+q[0];const B=bands[k]=bands[k]||{s:x.s,b:q[0],o:q[2],n:0,sum:0,max:0};if(q[1]>0){B.n++;B.sum+=q[1];B.max=Math.max(B.max,q[1])}}
+const rows=Object.values(bands).sort((a,b)=>SYSORD.indexOf(a.s)-SYSORD.indexOf(b.s)||a.o-b.o);
+$("bandTable").innerHTML=`<thead><tr><th>System</th><th>Band</th><th>Tracked / in view</th><th>Mean C/N0</th><th>Best</th></tr></thead><tbody>`+
+rows.map(B=>`<tr class="${B.s==="E"&&B.b==="E6"?"e6":""}"><td><i style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${SYS[B.s][1]};margin-right:5px"></i>${SYS[B.s][0]}</td><td>${B.b}</td><td>${B.n} / ${by[B.s].length}</td><td>${B.n?(B.sum/B.n).toFixed(1)+" dB-Hz":"–"}</td><td>${B.n?B.max:"–"}</td></tr>`).join("")+"</tbody>";
+const e6=bands["E|E6"], gal=by.E?by.E.length:0;
+$("e6Note").innerHTML=!gal?"No Galileo satellites in view.":!e6||!e6.n?`<span class="stale">No Galileo E6 signal tracked</span> (${gal} Galileo satellites in view). Galileo HAS is sent on E6: check that the antenna covers E6 (1278 MHz).`
+:`Galileo E6 tracked on ${e6.n} of ${gal} satellites, mean ${(e6.sum/e6.n).toFixed(1)} dB-Hz${e6.sum/e6.n<35?": weak for decoding HAS (aim for 35 dB-Hz or more)":""}.`;
+// signal bars
+const svg=$("sigBars"), list=sats.filter(x=>x.sig.length), gw=Math.max(26,8+6*Math.max(1,...list.map(x=>x.sig.length)));
+const L=34,Bm=18,T=6,W=Math.max(svg.parentElement.clientWidth||600,L+list.length*gw+6),H=210,ph=H-T-Bm,yv=v=>T+ph*(1-Math.min(v,55)/55);
+svg.style.width=W+"px"; let b="";
+for(const v of [10,20,30,40,50]){b+=`<line x1="${L}" x2="${W-4}" y1="${yv(v)}" y2="${yv(v)}" stroke="#9aa5a3" stroke-opacity="${v===40||v===30?.55:.28}"/><text x="${L-5}" y="${yv(v)+4}" text-anchor="end">${v}</text>`}
+b+=`<text x="2" y="${T+8}" style="font-size:10px">dB-Hz</text>`;
+list.forEach((x,i)=>{const col=(SYS[x.s]||["?","#9E9E9E"])[1],sg=x.sig.slice().sort((a,c)=>a[2]-c[2]),x0=L+i*gw+3,bw=Math.max(4,(gw-8)/Math.max(1,sg.length));
+sg.forEach((q,j)=>{const op=[1,.78,.58,.42,.32,.25][j]*(x.u?1:.4);if(q[1]>0)b+=`<rect x="${x0+j*bw}" y="${yv(q[1])}" width="${bw-1}" height="${T+ph-yv(q[1])}" fill="${col}" fill-opacity="${op}"><title>${satLab(x)} ${q[0]}: ${q[1]} dB-Hz${x.u?"":" (not used)"}</title></rect>`;
+else b+=`<rect x="${x0+j*bw}" y="${T+ph-2}" width="${bw-1}" height="2" fill="#9aa5a3"><title>${satLab(x)} ${q[0]}: not tracked</title></rect>`});
+b+=`<text x="${x0+(gw-6)/2}" y="${H-4}" text-anchor="middle" style="font-size:10px${x.u?";fill:var(--ink)":""}">${satLab(x)}</text>`});
+svg.setAttribute("viewBox",`0 0 ${W} ${H}`); svg.innerHTML=b;
 }
 let refMsg="";
 const ymdS=(y,ms)=>y?`${String(y).slice(0,4)}-${String(y).slice(4,6)}-${String(y).slice(6,8)} ${new Date(ms).toISOString().slice(11,19)} UTC`:"–";

@@ -209,6 +209,15 @@ The LG290P computes **one** position at a time. It cannot run SBAS and Galileo H
 - **Speed and movement** from RMC: moving above 0.5 m/s for 3 s, stationary below 0.3 m/s for 10 s, so a stop at traffic lights does not flip it.
 - Positions go to the apps **exactly as the receiver computes them**: nothing is held or replaced, so tests show real behaviour. The switching between methods is the receiver's own.
 
+### Sky tab
+
+A sky plot and the signal strength of every satellite and band, from the receiver's GSV (in view, elevation, azimuth, C/N0 per signal) and GSA (used in the position) messages, refreshed every 2 s (`GET /api/sky`).
+
+- **Sky plot:** north up, zenith in the centre, rings at 0°, 30° and 60° elevation. Colours by system as in PocketGNSS; filled = used in the position, ring = not used, outer ring = tracked on more than one band.
+- **Bands:** for each system and band (L1/L2/L5, G1/G2, E1/E6/E5b/E5a, B1I/B3I/B2a …), the satellites tracked out of those in view, mean and best C/N0. The Galileo E6 row is highlighted with a note: HAS is sent on E6, so this shows directly whether the antenna receives it.
+- **Signal strength:** one group of bars per satellite, one bar per band, highest frequency first; faded when not used.
+- GSV and GSA must be on in the receiver (NMEA tab); the tab says so when they are missing.
+
 ### History in flash
 
 The Methods tab also keeps a **history**: one record every 10 s with the UTC date and time, uptime, method, corrections (live / stale / none), correction age, base station or EGNOS PRN, estimated and actual error, position, speed, moving, satellites and HDOP.

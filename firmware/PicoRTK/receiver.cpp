@@ -15,6 +15,8 @@ static uint32_t rmcAtMs = 0;
 SharedGga sharedGga;
 static SharedAccuracy sharedAcc;
 static MethodTracker tracker; // under ggaMutex
+static SkyTable sky;           // under skyMutex
+static mutex_t skyMutex;
 static RefPoint refPoint;     // under ggaMutex
 mutex_t ggaMutex;
 Stats stats;
@@ -123,6 +125,13 @@ static void parseAccuracy(const char *s, size_t len, const char *id)
     }
 }
 
+void getSky(SkyTable &out)
+{
+    mutex_enter_blocking(&skyMutex);
+    out = sky;
+    mutex_exit(&skyMutex);
+}
+
 void getMethods(MethodTracker &out, RefPoint &ref)
 {
     mutex_enter_blocking(&ggaMutex);
@@ -172,6 +181,7 @@ bool getLatestGga(SharedGga &out)
 
 void receiverInitShared()
 {
+    mutex_init(&skyMutex);
     mutex_init(&ggaMutex);
     mutex_init(&typesMutex);
     sharedGga.len = 0;
@@ -221,6 +231,14 @@ static void handleSentence(const char *s, size_t len)
         diagC1 = 32;
         parseAccuracy(s, len, id);
         diagC1 = 33;
+        if (strcmp(id, "GSV") == 0 || strcmp(id, "GSA") == 0)
+        {
+            uint32_t now = millis();
+            mutex_enter_blocking(&skyMutex);
+            sky.feed(s, len, now);
+            sky.expire(now);
+            mutex_exit(&skyMutex);
+        }
         if (strcmp(id, "RMC") == 0)
         {
             uint32_t d = rmcDate(s, len);
