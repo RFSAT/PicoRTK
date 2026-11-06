@@ -182,6 +182,7 @@ module ghost() {
 }
 
 if (part == "base") base();
-else if (part == "lid") translate([0, 0, z_in1 + lid_t]) mirror([0, 0, 1]) lid();   // printed top face down
+else if (part == "lid") translate([0, 0, z_in1 + lid_t]) rotate([180, 0, 0]) lid();   // printed top face down: turned over (a rotation, not a mirror)
+else if (part == "lid_check") translate([0, 0, z_in1 + lid_t]) rotate([180, 0, 0]) import("picortk_case_lid.stl");   // the printed lid turned back over
 else if (part == "assembly") { color("Gainsboro") base(); ghost(); color("LightSteelBlue", 0.45) lid(); }
 else if (part == "exploded") { color("Gainsboro") base(); ghost(); color("LightSteelBlue") translate([0, 0, 18]) lid(); }
