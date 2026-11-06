@@ -48,11 +48,13 @@ When space runs out, the longest values are cut with "…" (full value on hover)
 .tiles section{min-width:0}
 @media (max-width:900px){.tiles{grid-template-columns:repeat(2,auto)}.tiles section:last-child{grid-column:1/-1}}
 @media (max-width:600px){.tiles{grid-template-columns:minmax(0,1fr)}.tiles section:last-child{grid-column:auto}}
-.about{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 20px;align-items:start}
-.about p{margin:0 0 6px}
-.about .credit{border-left:3px solid var(--accent);padding-left:12px;font-size:14px;line-height:1.5;min-width:200px}
+.about{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 20px;align-items:start;padding-top:10px;padding-bottom:10px}
+.about h2{margin:0 0 4px}
+.about p{margin:0;line-height:1.45}
+.about .credit{border-left:3px solid var(--accent);padding-left:10px;font-size:13px;line-height:1.4;white-space:nowrap}
+.about .credit .hint{margin:2px 0 0;font-size:12px}
 .about a{color:var(--accent)}
-@media (max-width:700px){.about{grid-template-columns:1fr}.about .credit{min-width:0}}
+@media (max-width:700px){.about{grid-template-columns:1fr}.about .credit{white-space:normal}}
 /* Phones: thinner margins, same font sizes */
 @media (max-width:600px){header,nav{padding-left:8px;padding-right:8px}main{padding:4px 6px 16px;gap:8px}section{padding:8px}.grid{gap:6px 8px}.kv dt{white-space:normal}}
 .tbl{overflow-x:auto}
@@ -142,14 +144,12 @@ dt[data-help],th[data-help]{text-decoration:underline dotted var(--muted);text-u
 <section class="about">
 <div>
 <h2>PicoRTK · RTK GNSS rover</h2>
-<p>PicoRTK turns a Raspberry Pi Pico 2 W and a Quectel LG290P quad-band receiver (L1, L2, L5, E6) into a centimetre-level RTK rover. The Pico fetches RTCM corrections over Wi-Fi from up to four NTRIP sources in priority order: your own base, a VRS, the nearest network station, then a public caster. It switches to the next source automatically when one fails. Every correction frame is checked before it reaches the receiver. Without internet, the receiver can fall back to Galileo HAS (about 20 cm).</p>
+<p>Raspberry Pi Pico 2 W with a Quectel LG290P quad-band receiver (L1, L2, L5, E6), for centimetre-level RTK. RTCM comes over Wi-Fi from up to four NTRIP sources in priority order (own base, VRS, nearest station, public caster), with automatic failover and every frame checked. Without internet: Galileo HAS, about 20 cm.</p>
 </div>
 <div class="credit">
-<strong>RFSAT Limited</strong><br>
-Design and firmware<br>
-Dublin, Ireland · Athens, Greece<br>
-<a href="https://rfsat.com" target="_blank" rel="noopener">rfsat.com</a>
-<p class="hint" style="margin-top:8px">Built with Arduino-Pico, BTstack, lwIP and ArduinoJson.<br>Developed with the help of Claude AI (Anthropic).</p>
+<strong>RFSAT Limited</strong> · design and firmware<br>
+Dublin · Athens · <a href="https://rfsat.com" target="_blank" rel="noopener">rfsat.com</a>
+<div class="hint" data-help="Built with Arduino-Pico, BTstack, lwIP and ArduinoJson. Developed with the help of Claude AI (Anthropic).">Arduino-Pico, BTstack, lwIP, ArduinoJson · with Claude AI</div>
 </div>
 </section>
 <section class="modebar">
