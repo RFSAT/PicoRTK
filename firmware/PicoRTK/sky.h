@@ -6,6 +6,8 @@
 
 static const int SKY_MAX_SATS = 72;
 static const int SKY_MAX_SIGS = 6;
+static const uint32_t SKY_LIVE_MS = 5000;   // reported in GSV within this time = live
+static const uint32_t SKY_KEEP_MS = 600000; // a satellite that lost lock stays (greyed) this long
 
 struct SkySig
 {
@@ -34,8 +36,10 @@ class SkyTable
   public:
     // Feed every GSV and GSA sentence (checksum already verified). Returns true if it was one of them.
     bool feed(const char *s, size_t len, uint32_t nowMs);
-    // Drop satellites not reported for this long
-    void expire(uint32_t nowMs, uint32_t maxAgeMs = 5000);
+    // Drop satellites not reported for this long (signals: not reported for SKY_LIVE_MS)
+    void expire(uint32_t nowMs, uint32_t maxAgeMs = SKY_KEEP_MS);
+    static bool live(const SkySat &s, uint32_t nowMs) { return nowMs - s.seenMs < SKY_LIVE_MS; }
+    uint32_t firstGsvMs() const { return _firstGsv; }
     int count() const { return SKY_MAX_SATS; }
     const SkySat &at(int i) const { return _s[i]; }
     // Used in the solution: listed in a GSA within the last 3 s
@@ -46,5 +50,24 @@ class SkyTable
   private:
     SkySat *find(char sys, uint16_t prn, bool create, uint32_t nowMs);
     SkySat _s[SKY_MAX_SATS];
-    uint32_t _lastGsv = 0, _lastGsa = 0;
+    uint32_t _lastGsv = 0, _lastGsa = 0, _firstGsv = 0;
 };
+
+// Last known sky, saved to flash so the next start can show it (greyed) before the receiver locks
+struct SkySnapSat
+{
+    char sys;
+    uint8_t el, used, pad;
+    uint16_t prn;
+    int16_t az;
+};
+struct SkySnap
+{
+    uint32_t magic = 0; // SKY_SNAP_MAGIC when valid
+    uint32_t n = 0;
+    int64_t utc = -1;   // when it was taken (s since 1970)
+    SkySnapSat s[SKY_MAX_SATS];
+};
+static const uint32_t SKY_SNAP_MAGIC = 0x534B5931; // "SKY1"
+// Live satellites with a known position into a snapshot taken at utc. Returns the count.
+int skySnapshot(const SkyTable &t, uint32_t nowMs, int64_t utc, SkySnap &out);

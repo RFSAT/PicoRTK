@@ -189,6 +189,8 @@ bool SkyTable::feed(const char *s, size_t len, uint32_t now)
             }
         }
         _lastGsv = now;
+        if (!_firstGsv)
+            _firstGsv = now ? now : 1;
         return true;
     }
 
@@ -223,7 +225,28 @@ void SkyTable::expire(uint32_t now, uint32_t maxAge)
             x = SkySat();
         else if (x.sys)
             for (auto &g : x.sig)
-                if (g.id && now - g.atMs > maxAge)
-                    g = SkySig();
+                if (g.id && now - g.atMs > SKY_LIVE_MS)
+                    g = SkySig(); // lost lock: no signal level any more, the position is kept
     }
+}
+
+int skySnapshot(const SkyTable &t, uint32_t now, int64_t utc, SkySnap &o)
+{
+    o.magic = SKY_SNAP_MAGIC;
+    o.utc = utc;
+    o.n = 0;
+    for (int i = 0; i < t.count(); i++)
+    {
+        const SkySat &x = t.at(i);
+        if (!x.sys || !SkyTable::live(x, now) || x.el < 0 || x.az < 0)
+            continue;
+        SkySnapSat &s = o.s[o.n++];
+        s.sys = x.sys;
+        s.prn = x.prn;
+        s.el = (uint8_t)x.el;
+        s.az = x.az;
+        s.used = SkyTable::used(x, now) ? 1 : 0;
+        s.pad = 0;
+    }
+    return (int)o.n;
 }

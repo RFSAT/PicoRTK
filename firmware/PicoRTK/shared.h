@@ -67,6 +67,8 @@ void getMethods(MethodTracker &out, RefPoint &ref);
 // Satellites in view (GSV) and used (GSA), for the Sky tab (core 1 writes, core 0 copies)
 #include "sky.h"
 void getSky(SkyTable &out);
+// Current UTC (s since 1970) from the latest GGA and RMC date, -1 when not known
+int64_t currentUtc();
 
 // core 1 -> core 0: one HistRec every 10 s for the flash history
 extern SpscRing<8192> histToCore0;

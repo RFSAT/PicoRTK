@@ -125,6 +125,17 @@ static void parseAccuracy(const char *s, size_t len, const char *id)
     }
 }
 
+int64_t currentUtc()
+{
+    SharedGga g;
+    if (!getLatestGga(g) || millis() - g.atMs > 5000 || !rmcYmd)
+        return -1;
+    HistRec r{};
+    r.ymd = rmcYmd;
+    r.utcMs = ggaTimeMs(g.info.utc);
+    return histEpoch(r);
+}
+
 void getSky(SkyTable &out)
 {
     mutex_enter_blocking(&skyMutex);

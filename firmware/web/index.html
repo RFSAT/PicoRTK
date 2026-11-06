@@ -707,16 +707,25 @@ async function skyPoll(){
   try{drawSky(await (await fetch("/api/sky")).json())}catch(e){}
   setTimeout(skyPoll,2000);
 }
+const agoTxt=s=>s<90?s+" s":s<5400?Math.round(s/60)+" min":(s/3600).toFixed(1)+" h";
 function drawSky(d){
-  const sats=(d.sats||[]).slice().sort((a,b)=>SYSORD.indexOf(a.s)-SYSORD.indexOf(b.s)||a.p-b.p);
+  const all=(d.sats||[]).slice().sort((a,b)=>SYSORD.indexOf(a.s)-SYSORD.indexOf(b.s)||a.p-b.p);
+  const sats=all.filter(x=>x.a<5), lost=all.filter(x=>x.a>=5);
+  const LK=d.lastKnown, known=LK?LK.sats||[]:[], kAge=LK&&d.utc>0&&LK.utc>0?d.utc-LK.utc:-1;
   const noGsv=d.gsvAgeMs<0||d.gsvAgeMs>5000;
   $("skyNote").innerHTML=noGsv?`<span class="stale">No GSV from the receiver${d.gsvAgeMs>0?" for "+Math.round(d.gsvAgeMs/1000)+" s":""}.</span> Switch GSV (and GSA) on in the NMEA tab and apply it to the receiver.`
     :`${sats.length} satellites in view, ${sats.filter(x=>x.u).length} used in the position`+(d.gsaAgeMs<0||d.gsaAgeMs>5000?" (no GSA: used satellites unknown)":"")+".";
+  if(known.length)$("skyNote").innerHTML+=` <span style="color:var(--muted)">Grey dashed: ${known.length} satellites at their last known positions from the previous run (${new Date(LK.utc*1000).toISOString().slice(11,16)} UTC${kAge>=0?", "+agoTxt(kAge)+" ago":""}); they have moved since and are replaced as the receiver locks on.</span>`;
+  if(lost.length)$("skyNote").innerHTML+=` <span style="color:var(--muted)">Grey: ${lost.length} lost lock (kept up to 10 min).</span>`;
   // sky plot: zenith in the centre, horizon on the outer ring, north up
   const C=200,Rr=170; let g="";
   for(const e of [0,30,60]){const r=Rr*(90-e)/90;g+=`<circle cx="${C}" cy="${C}" r="${r}" fill="none" stroke="#9aa5a3" stroke-opacity=".5"/><text x="${(C+r*0.7071+3).toFixed(1)}" y="${(C+r*0.7071+11).toFixed(1)}" style="font-size:10px">${e}°</text>`}
   g+=`<line x1="${C-Rr}" x2="${C+Rr}" y1="${C}" y2="${C}" stroke="#9aa5a3" stroke-opacity=".4"/><line x1="${C}" x2="${C}" y1="${C-Rr}" y2="${C+Rr}" stroke="#9aa5a3" stroke-opacity=".4"/>`;
   g+=`<text x="${C}" y="${C-Rr-8}" text-anchor="middle">N</text><text x="${C}" y="${C+Rr+18}" text-anchor="middle">S</text><text x="${C+Rr+10}" y="${C+4}" text-anchor="middle">E</text><text x="${C-Rr-10}" y="${C+4}" text-anchor="middle">W</text>`;
+  const pos=(el,az)=>{const r=Rr*(90-el)/90,a=az*Math.PI/180;return [C+r*Math.sin(a),C-r*Math.cos(a)]};
+  for(const x of known.concat(lost)){if(x.el<0||x.az<0)continue;const [px,py]=pos(x.el,x.az),prev=x.a===undefined;
+    const tip=`${satLab(x)} · elevation ${x.el}°, azimuth ${x.az}° · `+(prev?`last known position from the previous run`:`lost lock ${agoTxt(x.a)} ago`);
+    g+=`<g opacity=".55"><title>${tip}</title><circle cx="${px}" cy="${py}" r="6" fill="none" stroke="#9aa5a3" stroke-width="2"${prev?' stroke-dasharray="3 2"':""}/><text class="sat" x="${px}" y="${py-12}" text-anchor="middle" style="fill:var(--muted)">${satLab(x)}</text></g>`}
   for(const x of sats){if(x.el<0||x.az<0)continue;
     const r=Rr*(90-x.el)/90,a=x.az*Math.PI/180,px=C+r*Math.sin(a),py=C-r*Math.cos(a),col=(SYS[x.s]||["?","#9E9E9E"])[1];
     const tracked=x.sig.filter(q=>q[1]>0),multi=tracked.length>1;
@@ -727,7 +736,7 @@ function drawSky(d){
   // legend: used / in view per system
   const by={};for(const x of sats)(by[x.s]=by[x.s]||[]).push(x);
   $("skyLegend").innerHTML=Object.keys(by).map(k=>`<span><i style="background:${SYS[k][1]}"></i>${SYS[k][0]} ${by[k].filter(x=>x.u).length}/${by[k].length}</span>`).join("")+
-    `<span style="color:var(--muted)">filled = used · ring = not used · outer ring = more than one band</span>`;
+    `<span style="color:var(--muted)">filled = used · ring = not used · outer ring = more than one band · grey = no lock (dashed: previous run)</span>`;
   // bands summary
   const bands={};
   for(const x of sats)for(const q of x.sig){const k=x.s+"|"+q[0];const B=bands[k]=bands[k]||{s:x.s,b:q[0],o:q[2],n:0,sum:0,max:0};if(q[1]>0){B.n++;B.sum+=q[1];B.max=Math.max(B.max,q[1])}}

@@ -35,11 +35,36 @@ static void drain()
     }
 }
 
+static SkySnap lastSky; // previous run's sky, for the Sky tab until the receiver locks
+const SkySnap &skyLastKnown() { return lastSky; }
+
+// Save the live sky with the time of the newest dated record, so the next start can show it
+static void skySave()
+{
+    int64_t utc = -1;
+    for (int i = bufN - 1; i >= 0 && utc < 0; i--)
+        utc = histEpoch(buf[i]);
+    if (utc < 0)
+        return; // no date yet
+    static SkyTable t;
+    static SkySnap snap;
+    getSky(t);
+    if (skySnapshot(t, millis(), utc, snap) == 0)
+        return;
+    File f = LittleFS.open("/sky.bin", "w");
+    if (f)
+    {
+        f.write((const uint8_t *)&snap, sizeof(snap));
+        f.close();
+    }
+}
+
 void historyFlush()
 {
     drain(); // include the records still on their way from core 1 (shutdown, restart, download)
     if (!bufN)
         return;
+    skySave();
     if (fileRecs(F_NEW) * sizeof(HistRec) >= HIST_FILE_MAX)
     {
         LittleFS.remove(F_OLD);
@@ -64,6 +89,13 @@ static void add(const HistRec &r)
 
 void historySetup()
 {
+    if (File f = LittleFS.open("/sky.bin", "r"))
+    {
+        if (f.read((uint8_t *)&lastSky, sizeof(lastSky)) != sizeof(lastSky) || lastSky.magic != SKY_SNAP_MAGIC ||
+            lastSky.n > SKY_MAX_SATS)
+            lastSky = SkySnap();
+        f.close();
+    }
     for (const char *old : {"/hist0.bin", "/hist1.bin"})
         if (LittleFS.exists(old))
             LittleFS.remove(old);

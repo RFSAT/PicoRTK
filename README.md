@@ -217,6 +217,7 @@ A sky plot and the signal strength of every satellite and band, from the receive
 - **Bands:** for each system and band (L1/L2/L5, G1/G2, E1/E6/E5b/E5a, B1I/B3I/B2a …), the satellites tracked out of those in view, mean and best C/N0. The Galileo E6 row is highlighted with a note: HAS is sent on E6, so this shows directly whether the antenna receives it.
 - **Signal strength:** one group of bars per satellite, one bar per band, highest frequency first; faded when not used.
 - GSV and GSA must be on in the receiver (NMEA tab); the tab says so when they are missing.
+- **No lock yet:** a satellite that loses lock stays on the plot, grey, for up to 10 minutes. The live sky is also saved to flash with every history write (`/sky.bin`), so after a restart the plot starts with the previous run's satellites, grey and dashed, with the time they were taken; each is replaced as the receiver locks on, and the rest disappear 3 minutes after live data starts. They have moved since (about 0.5° a minute for GPS), so they show roughly where to expect satellites, not where they are.
 
 ### History in flash
 

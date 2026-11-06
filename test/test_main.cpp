@@ -476,13 +476,28 @@ static void testSky()
     feed("$GNGSA,A,3,05,,,,,,,,,,,,1.2,0.7,1.0,3");
     CHECK(SkyTable::used(*g10, now) && SkyTable::used(*e5, now) && !SkyTable::used(*e12, now));
     CHECK(!SkyTable::used(*g10, now + 4000));
-    // expiry
+    // lost lock: kept (not live, no signal level) for up to 10 min, then dropped
     now += 6000;
     feed("$GAGSV,1,1,01,05,41,121,40,7");
     t.expire(now);
-    nSats = 0;
-    for (int i = 0; i < t.count(); i++) if (t.at(i).sys) nSats++;
-    CHECK(nSats == 1);
+    int nLive = 0, nKept = 0;
+    for (int i = 0; i < t.count(); i++) if (t.at(i).sys) { nKept++; if (SkyTable::live(t.at(i), now)) nLive++; }
+    CHECK(nLive == 1 && nKept == 12);
+    CHECK(g10->sig[0].id == 0 && g10->el == 77); // signal gone, position kept
+    CHECK(t.firstGsvMs() == 1000);
+    SkySnap snap;
+    CHECK(skySnapshot(t, now, 1793966400LL, snap) == 1 && snap.s[0].sys == 'E' && snap.s[0].prn == 5 && snap.s[0].el == 41);
+    CHECK(snap.magic == SKY_SNAP_MAGIC && snap.utc == 1793966400LL);
+    now += SKY_KEEP_MS;
+    t.expire(now);
+    nKept = 0;
+    for (int i = 0; i < t.count(); i++) if (t.at(i).sys) nKept++;
+    CHECK(nKept == 1);
+    now += 1;
+    t.expire(now);
+    nKept = 0;
+    for (int i = 0; i < t.count(); i++) if (t.at(i).sys) nKept++;
+    CHECK(nKept == 0);
 }
 
 int main()

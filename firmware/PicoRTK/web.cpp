@@ -463,8 +463,10 @@ void webSetup()
         const uint32_t now = millis();
         String js;
         js.reserve(4096);
+        const int64_t utcNow = currentUtc();
         js = "{\"gsvAgeMs\":" + String(t.lastGsvMs() ? (long)(now - t.lastGsvMs()) : -1) +
-             ",\"gsaAgeMs\":" + String(t.lastGsaMs() ? (long)(now - t.lastGsaMs()) : -1) + ",\"sats\":[";
+             ",\"gsaAgeMs\":" + String(t.lastGsaMs() ? (long)(now - t.lastGsaMs()) : -1) + ",\"utc\":" + String((long)utcNow) +
+             ",\"sats\":[";
         bool first = true;
         for (int i = 0; i < t.count(); i++)
         {
@@ -474,7 +476,8 @@ void webSetup()
             js += first ? "{\"s\":\"" : ",{\"s\":\"";
             first = false;
             js += x.sys;
-            js += "\",\"p\":" + String(x.prn) + ",\"el\":" + String(x.el) + ",\"az\":" + String(x.az) + ",\"u\":" +
+            js += "\",\"p\":" + String(x.prn) + ",\"el\":" + String(x.el) + ",\"az\":" + String(x.az) +
+                  ",\"a\":" + String((now - x.seenMs) / 1000) + ",\"u\":" +
                   (SkyTable::used(x, now) ? "1" : "0") + ",\"sig\":[";
             bool fs = true;
             for (const SkySig &g : x.sig)
@@ -488,7 +491,30 @@ void webSetup()
             }
             js += "]}";
         }
-        js += "]}";
+        js += "]";
+        // Last known sky from the previous run, until 3 min after the first live GSV: the satellites
+        // not seen yet in this run, for the page to show greyed
+        const SkySnap &k = skyLastKnown();
+        if (k.magic == SKY_SNAP_MAGIC && k.n && (!t.firstGsvMs() || now - t.firstGsvMs() < 180000))
+        {
+            js += ",\"lastKnown\":{\"utc\":" + String((long)k.utc) + ",\"sats\":[";
+            bool fk = true;
+            for (uint32_t i = 0; i < k.n; i++)
+            {
+                const SkySnapSat &q = k.s[i];
+                bool inTable = false;
+                for (int j = 0; j < t.count() && !inTable; j++)
+                    inTable = t.at(j).sys == q.sys && t.at(j).prn == q.prn;
+                if (inTable)
+                    continue;
+                js += fk ? "{\"s\":\"" : ",{\"s\":\"";
+                fk = false;
+                js += q.sys;
+                js += "\",\"p\":" + String(q.prn) + ",\"el\":" + String(q.el) + ",\"az\":" + String(q.az) + ",\"u\":" + String(q.used) + "}";
+            }
+            js += "]}";
+        }
+        js += "}";
         server.sendHeader("Cache-Control", "no-store");
         server.send(200, "application/json", js);
     });
