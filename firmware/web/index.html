@@ -77,7 +77,7 @@ pre{margin:0;background:var(--code);color:var(--codeink);font:12.5px/1.5 var(--m
 #restartInfo dd{white-space:normal;overflow:visible}
 .methbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin-top:8px}
 .outline{margin:8px 0 0;font-size:13px}
-.outline.hold{color:var(--warn);font-weight:600}
+.stale{color:var(--warn);font-weight:600}
 #trace{width:100%;height:clamp(150px,24vh,300px);display:block;margin-top:8px}
 #trace text{font:11px var(--sans);fill:var(--muted)}
 .tw{overflow-x:auto}
@@ -167,27 +167,23 @@ dt[data-help],th[data-help]{text-decoration:underline dotted var(--muted);text-u
 <div data-page="methods" hidden>
   <section>
     <h2>Positioning methods</h2>
-    <p class="hint" data-help="The LG290P computes one position at a time. When the method changes (RTK, SBAS, Galileo HAS, GNSS only), the stopped method's last figures stay here, marked with how long ago it stopped. Estimated accuracy is the receiver's own figure; actual error is measured against the reference point.">The receiver calculates one method at a time. Rows marked ● are running now; the others show their last figures before they stopped.</p>
-    <div class="tw"><table class="meth"><thead><tr><th>Method</th><th>Status</th><th data-help="The receiver's own accuracy estimate, horizontal and vertical (PQTMPPPNAV for Galileo HAS, otherwise PQTMEPE or GST). For a stopped method: its last value.">Estimated H · V</th><th data-help="Distance of the reported position from the reference point, horizontal and vertical. Shown only once a reference point is recorded from an RTK fixed solution.">Actual error H · V</th><th data-help="Best (smallest) horizontal estimate during the latest run of this method.">Best estimate</th><th>Time</th></tr></thead><tbody id="methRows"></tbody></table></div>
+    <p class="hint" data-help="The LG290P computes one position at a time. When the method changes (RTK, SBAS, Galileo HAS, GNSS only), the stopped method's last figures stay here, marked with how long ago it stopped. Estimated accuracy is the receiver's own figure; actual error is measured against the reference point.">The receiver calculates one method at a time. Rows marked ● are running now; the others show their last figures before they stopped. Positions go to the apps exactly as the receiver computes them.</p>
+    <div class="tw"><table class="meth"><thead><tr><th>Method</th><th>Status</th><th data-help="Where the corrections in use come from and how old they are. Live = still arriving (RTCM in the last 5 s; HAS and EGNOS from the satellites). Stale = RTCM has stopped and the receiver is still using the last data it got, for up to about 2 minutes by default, while their age grows.">Corrections</th><th data-help="The receiver's own accuracy estimate, horizontal and vertical (PQTMPPPNAV for Galileo HAS, otherwise PQTMEPE or GST). For a stopped method: its last value.">Estimated H · V</th><th data-help="Distance of the reported position from the reference point, horizontal and vertical. Shown only once a reference point is recorded from an RTK fixed solution.">Actual error H · V</th><th data-help="Best (smallest) horizontal estimate during the latest run of this method.">Best estimate</th><th>Time</th></tr></thead><tbody id="methRows"></tbody></table></div>
     <p class="outline" id="outLine"></p>
     <div class="methbar">
       <button type="button" class="btn" id="refSet" data-help="Records the current position as the reference point (the antenna's true position). Only from an RTK fixed solution, so the actual errors are measured against a centimetre-level point. Keep the antenna in the same place afterwards.">Set reference from RTK fix</button>
       <button type="button" class="btn" id="refClear">Clear reference</button>
       <span class="hint" id="refNote" style="margin:0"></span>
     </div>
-    <div class="methbar">
-      <label class="check" style="flex-direction:row;align-items:center;gap:6px;text-transform:none;font-size:14px;color:var(--ink)" data-help="Static demos only. While Galileo HAS is converging and its estimated accuracy is worse than the last SBAS fix, the Bluetooth and TCP outputs carry that last SBAS position (GGA, RMC, GLL, GNS) instead. It switches to HAS as soon as HAS is as good, and never holds a position older than 30 minutes. Wrong on a moving receiver: leave it off there."><input type="checkbox" id="holdSbas" style="width:auto"> Static demo: hold the last SBAS position until HAS is better</label>
-      <span class="hint" id="holdNote" style="margin:0"></span>
-    </div>
     <svg id="trace" role="img" aria-label="Accuracy over the last 30 minutes"></svg>
     <p class="hint" id="traceNote" style="margin:4px 0 0">Last 30 minutes, one point every 10 s: solid = receiver estimate, dashed = actual error (with a reference point). Background colour = method.</p>
   </section>
   <section>
     <h2>History</h2>
-    <p class="hint">One record every 10 s (method, estimate, actual error, position, satellites, HDOP, whether the apps got a held SBAS position), kept in the Pico's flash across restarts and power cuts. It is written to flash every 5 minutes and when you shut down or restart from this page, so pulling the power loses at most the last 5 minutes. When full, the oldest records go first.</p>
+    <p class="hint">One record every 10 s (method, corrections live or stale with their age and base, estimate, actual error, position, speed, satellites, HDOP), kept in the Pico's flash across restarts and power cuts. It is written to flash every 5 minutes and when you shut down or restart from this page, so pulling the power loses at most the last 5 minutes. When full, the oldest records go first.</p>
     <dl class="kv" id="histInfo"></dl>
     <div class="methbar">
-      <a class="btn primary" id="histDl" href="/api/history.csv" download data-help="Downloads the whole history as a CSV file (UTC date and time, uptime, method, estimated and actual error in metres, latitude, longitude, altitude, satellites, HDOP, held SBAS). Restarts appear as 'restart' lines. While the file is sent, the correction stream and the Bluetooth/TCP links pause for a few seconds.">Download CSV</a>
+      <a class="btn primary" id="histDl" href="/api/history.csv" download data-help="Downloads the whole history as a CSV file (UTC date and time, uptime, method, corrections live/stale, correction age, base or EGNOS PRN, estimated and actual error in metres, latitude, longitude, altitude, speed, moving, satellites, HDOP). Restarts appear as 'restart' lines. While the file is sent, the correction stream and the Bluetooth/TCP links pause for a few seconds.">Download CSV</a>
       <button type="button" class="btn" id="histClear">Clear history</button>
       <span class="hint" id="histNote" style="margin:0"></span>
     </div>
@@ -368,7 +364,9 @@ async function status(){
     else if(q===0){fixLabel="No fix";fixFrom="waiting for satellites"}
     else if(q===6){fixLabel="Dead reckoning";fixFrom="no satellites"}
     else{fixLabel=g.qualityName;fixFrom="–"}
-    if(s.methods&&q!=null)fixLabel=s.methods.current;
+    if(s.methods&&q!=null){fixLabel=s.methods.current;
+      const RG=s.methods.groups.find(x=>x.running), C=RG&&RG.corr;
+      if(C&&RG.name.startsWith("RTK")&&!C.live){fixLabel+=" (stale corrections)";fixFrom=`none arriving · last RTCM from base ${C.station??"?"}, ${Math.round(C.age??0)} s old`}}
     const m2=v=>v==null||v<0?"–":(v<0.1?(v*100).toFixed(1)+" cm":v<1?(v*100).toFixed(0)+" cm":v.toFixed(2)+" m");
     const acc=g.epeH!=null?`${m2(g.epeH)} H · ${m2(g.epeV)} V`:g.gstH!=null?`${m2(g.gstH)} H · ${m2(g.gstV)} V`:"–";
     const hasRow=P?`${SOL[P.sol]??("type "+P.sol)}${P.h!=null?" · "+m2(P.h):""}${P.age>=0?" · "+P.age.toFixed(0)+" s old":""}`
@@ -592,18 +590,20 @@ function renderMethods(s){
   const rows=M.groups.filter(g=>g.seen).map(g=>{
     const sub=g.last!==g.name?` · ${g.running?"":"last "}${esc(g.last)}`:"";
     const st=(g.running?"running":"stopped")+sub;
+    const C=g.corr||{}, age=C.age!=null?(C.age<10?C.age.toFixed(1):Math.round(C.age))+" s":"";
+    let cor="none";
+    if(g.name.startsWith("RTK")) cor=(C.live?"live":`<span class="stale">stale</span>`)+(C.station!=null?` · base ${C.station}`:"")+(age?` · ${age} old`:"")+(C.live?"":" · none arriving");
+    else if(g.name.startsWith("Galileo")) cor="Galileo E6"+(age?` · ${age} old`:"");
+    else if(g.name.startsWith("SBAS")) cor="EGNOS"+(C.station!=null?` · PRN ${C.station}`:"")+(age?` · ${age} old`:"");
     const est=g.estH!=null?`${mfmt(g.estH)} · ${mfmt(g.estV)}`:"–";
     const err=!M.ref.set?"no reference":g.errH!=null?`${mfmt(g.errH)} · ${mfmt(g.errV)}`:"–";
     const time=g.running?`for ${dur(g.runSec)}`:`ran ${dur(g.runSec)}, ended ${dur(g.endedAgoSec)} ago`;
-    return `<tr class="${g.running?"run":"off"}"><td>${esc(g.name)}</td><td>${st}</td><td>${est}</td><td>${err}</td><td>${mfmt(g.bestEstH)}</td><td>${time}</td></tr>`});
-  $("methRows").innerHTML=rows.join("")||`<tr><td colspan="6">No fix yet</td></tr>`;
-  const H=M.hold, o=$("outLine");
-  if(H.active){o.className="outline hold";o.textContent=`Apps receive: the held SBAS position from ${dur(H.sbasAgoSec)} ago (estimated ${mfmt(H.sbasEstH)}), until Galileo HAS is as good. Running: ${M.current}.`}
-  else{o.className="outline";o.textContent=`Apps receive: the running method, ${M.current}.`}
-  $("holdSbas").checked=!!H.enabled;
-  $("holdNote").textContent=holdMsg||(H.enabled?(H.active?"Holding.":"Not holding: "+H.reason+"."):"");
+    return `<tr class="${g.running?"run":"off"}"><td>${esc(g.name)}</td><td>${st}</td><td>${cor}</td><td>${est}</td><td>${err}</td><td>${mfmt(g.bestEstH)}</td><td>${time}</td></tr>`});
+  $("methRows").innerHTML=rows.join("")||`<tr><td colspan="7">No fix yet</td></tr>`;
+  const sp=M.speed;
+  $("outLine").textContent=(sp==null?"Speed: – (needs RMC from the receiver)":`Speed: ${sp.toFixed(1)} m/s (${(sp*3.6).toFixed(0)} km/h) · ${M.moving?"moving":"stationary"}`)+` · Running: ${M.current}`;
   // keep the settings object in step, so Save and restart on another tab does not undo these
-  if(cfg){cfg.corrections=cfg.corrections||{};cfg.corrections.holdSbas=!!H.enabled;cfg.reference=M.ref.set?{set:true,lat:+M.ref.lat,lon:+M.ref.lon,alt:+M.ref.alt}:{set:false,lat:0,lon:0,alt:0}}
+  if(cfg){cfg.reference=M.ref.set?{set:true,lat:+M.ref.lat,lon:+M.ref.lon,alt:+M.ref.alt}:{set:false,lat:0,lon:0,alt:0}}
   $("refNote").textContent=refMsg||(M.ref.set?`Reference: ${M.ref.lat}, ${M.ref.lon}, ${(+M.ref.alt).toFixed(3)} m`:"No reference point: actual errors are not shown.");
   $("refSet").disabled=M.currentCode!==5;
   $("refSet").title=M.currentCode===5?"":"Needs RTK fixed (now: "+M.current+")";
@@ -625,7 +625,7 @@ async function drawTrace(){
   svg.setAttribute("viewBox",`0 0 ${W} ${Hh}`);svg.innerHTML=g;
   const seen=[...new Set(sm.map(p=>p[1]))];$("traceNote").innerHTML="Last 30 minutes, one point every 10 s: solid line = receiver estimate, dashed = actual error (needs a reference point). Background: "+seen.map(m=>`<span style="color:${METHCOL[m]}">■</span> ${METHNAME[m]}`).join(" · ");
 }
-let refMsg="", holdMsg="";
+let refMsg="";
 const ymdS=(y,ms)=>y?`${String(y).slice(0,4)}-${String(y).slice(4,6)}-${String(y).slice(6,8)} ${new Date(ms).toISOString().slice(11,19)} UTC`:"–";
 let histAt=0;
 async function histInfo(){
@@ -633,7 +633,7 @@ async function histInfo(){
   try{const h=await (await fetch("/api/history")).json();
     const hrs=h.records*h.stepSec/3600, cap=h.capacityRecords*h.stepSec/3600;
     kv($("histInfo"),[["Records",`${h.records} (about ${hrs<1?Math.round(hrs*60)+" min":hrs.toFixed(1)+" h"})`],["From",ymdS(h.firstYmd,h.firstMs)],["To",ymdS(h.lastYmd,h.lastMs)],
-      ["Space used",`${(h.bytes/1024).toFixed(0)} KB of ${(h.capacityRecords*56/1024).toFixed(0)} KB · keeps about ${cap.toFixed(0)} h`]]);
+      ["Space used",`${(h.bytes/1024).toFixed(0)} KB of ${(h.capacityRecords*h.recordBytes/1024).toFixed(0)} KB · keeps about ${cap.toFixed(0)} h`]]);
   }catch(e){}
 }
 $("histClear").onclick=async()=>{if(!confirm("Delete the whole positioning history from the Pico? Download it first if you need it."))return;
@@ -641,8 +641,6 @@ $("histClear").onclick=async()=>{if(!confirm("Delete the whole positioning histo
 addEventListener("resize",()=>{clearTimeout(drawTrace.t);drawTrace.t=setTimeout(drawTrace,300)});
 $("refSet").onclick=async()=>{const r=await fetch("/api/ref",{method:"POST",body:"set"});refMsg=(r.ok?"":"Not set: ")+await r.text();await status();setTimeout(()=>refMsg="",8000)};
 $("refClear").onclick=async()=>{if(!confirm("Clear the reference point? Actual errors are no longer shown."))return;const r=await fetch("/api/ref",{method:"POST",body:"clear"});refMsg=await r.text();await status();setTimeout(()=>refMsg="",8000)};
-$("holdSbas").onchange=async e=>{if(e.target.checked&&!confirm("Hold the last SBAS position while Galileo HAS converges?\n\nOnly for an antenna that does not move: the apps receive a frozen position during that time."))return e.target.checked=false;
-  const r=await fetch("/api/hold",{method:"POST",body:e.target.checked?"on":"off"});holdMsg=await r.text();await status();setTimeout(()=>holdMsg="",8000)};
 
 async function setMode(m){
   if(m===curMode) return;

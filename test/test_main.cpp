@@ -329,59 +329,60 @@ static void testMethods()
     refError(none, 1, 1, 1, eh, ev);
     CHECK(eh < 0 && ev < 0);
 
-    // Tracker and hold
+    // Corrections per method
+    GgaInfo gr = mkGga(4, 27); gr.age = 1.2f;
+    CorrInfo c = correctionsFor(M_RTK_FIXED, gr, nullptr, true);
+    CHECK(c.live && c.station == 27 && c.age > 1.1f);
+    gr.age = 85;
+    c = correctionsFor(M_RTK_FIXED, gr, nullptr, false);
+    CHECK(!c.live && c.age > 84.9f);
+    PppNav ph; ph.sol = 6; ph.diffId = 9002; ph.diffAge = 4;
+    c = correctionsFor(M_HAS_CONV, mkGga(5, 9002), &ph, false);
+    CHECK(c.live && c.station == 9002 && c.age > 3.9f && c.age < 4.1f);
+    c = correctionsFor(M_SBAS, mkGga(2, 124), nullptr, false);
+    CHECK(c.live && c.station == 124);
+    c = correctionsFor(M_SBAS, mkGga(2, -1), nullptr, false);
+    CHECK(c.station == -1);
+    c = correctionsFor(M_GNSS, mkGga(1, -1), nullptr, false);
+    CHECK(!c.live && c.age < 0 && c.station == -1);
+
+    // Speed from RMC (knots -> m/s)
+    std::string rmcS = withChecksum("$GNRMC,120000.00,A,3758.1234567,N,02343.5678901,E,19.438,90.0,061126,,,R,V");
+    float v = rmcSpeed(rmcS.c_str(), rmcS.size());
+    CHECK(v > 9.99f && v < 10.01f);
+    std::string rmcN = withChecksum("$GNRMC,120000.00,V,,,,,,,061126,,,N,V");
+    CHECK(rmcSpeed(rmcN.c_str(), rmcN.size()) < 0);
+
+    // Tracker: stopped methods keep their last figures, corrections included
     MethodTracker t;
     uint32_t now = 1000;
-    t.update(now, mkGga(2, -1, 37.9000010, 23.7), M_SBAS, 0.67f, 1.0f, r, true);
-    CHECK(t.current() == M_SBAS && !t.holding() && t.holdReady());
-    CHECK(t.stat(G_SBAS).seen && t.stat(G_SBAS).estH > 0.66f);
-    CHECK(t.stat(G_SBAS).errH > 0.1f && t.stat(G_SBAS).errH < 0.12f);
+    CorrInfo cs; cs.live = true; cs.station = 124;
+    t.update(now, mkGga(2, -1, 37.9000010, 23.7), M_SBAS, 0.67f, 1.0f, r, cs, 0);
+    CHECK(t.current() == M_SBAS && t.stat(G_SBAS).seen && t.stat(G_SBAS).estH > 0.66f);
+    CHECK(t.stat(G_SBAS).errH > 0.1f && t.stat(G_SBAS).errH < 0.12f && t.stat(G_SBAS).corr.station == 124);
     now += 1000;
-    t.update(now, mkGga(5, 9002, 37.90002, 23.7), M_HAS_CONV, 1.9f, 3.0f, r, true);
-    CHECK(t.current() == M_HAS_CONV && t.holding());
-    CHECK(t.holdLat() > 37.9000009 && t.holdLat() < 37.9000011);
-    CHECK(t.stat(G_SBAS).lastMs == 1000);            // SBAS stopped, last figures kept
-    CHECK(t.stat(G_HAS).startMs == 2000);
-    now += 1000;
-    t.update(now, mkGga(5, 9002), M_HAS_CONV, 0.6f, 1.0f, r, true); // now better than SBAS
-    CHECK(!t.holding());
-    now += 1000;
-    t.update(now, mkGga(5, 9002), M_HAS_CONV, 0.9f, 1.0f, r, true); // worse again: stays released
-    CHECK(!t.holding());
-    t.update(now + 1000, mkGga(5, 9002), M_HAS_CONV, 1.9f, 3.0f, r, false); // hold switched off
-    CHECK(!t.holding());
+    CorrInfo ch; ch.live = true; ch.station = 9002; ch.age = 3;
+    t.update(now, mkGga(5, 9002, 37.90002, 23.7), M_HAS_CONV, 1.9f, 3.0f, r, ch, 0);
+    CHECK(t.current() == M_HAS_CONV && t.stat(G_SBAS).lastMs == 1000 && t.stat(G_HAS).startMs == 2000);
+    CHECK(t.stat(G_HAS).corr.age > 2.9f);
     CHECK(t.traceCount() == 1);
-    t.update(now + 11000, mkGga(5, 9002), M_HAS_CONV, 0.5f, 1.0f, r, false);
+    t.update(now + 11000, mkGga(5, 9002), M_HAS_CONV, 0.5f, 1.0f, r, ch, 0);
     CHECK(t.traceCount() == 2 && t.trace(1).estH < 0.51f && t.trace(0).method == M_SBAS);
 
-    // No hold without SBAS, and never with a stale SBAS position
-    MethodTracker t2;
-    t2.update(1000, mkGga(5, 9002), M_HAS_CONV, 1.9f, 3.0f, r, true);
-    CHECK(!t2.holding());
-    MethodTracker t3;
-    t3.update(1000, mkGga(2, -1), M_SBAS, 0.67f, 1.0f, r, true);
-    t3.update(1000 + MethodTracker::HOLD_MAX_MS + 1, mkGga(5, 9002), M_HAS_CONV, 1.9f, 3.0f, r, true);
-    CHECK(!t3.holding());
-
-    // Sentence rewriting
-    char out[300];
-    std::string gga = withChecksum("$GNGGA,120000.00,3758.1234567,N,02343.5678901,E,5,30,0.6,290.123,M,34.0,M,12.0,9002");
-    size_t n = nmeaReplacePosition(gga.c_str(), gga.size(), 37.9, -23.7, 280.5f, out, sizeof(out));
-    CHECK(n > 0 && nmeaChecksumOk(out, n));
-    GgaInfo g;
-    CHECK(nmeaParseGga(out, n, g));
-    CHECK(fabs(g.lat - 37.9) < 1e-9 && fabs(g.lon + 23.7) < 1e-9);
-    CHECK(g.quality == 2 && g.station == -1 && g.age < 0 && fabsf(g.alt - 280.5f) < 0.001f);
-    CHECK(g.sats == 30);
-    std::string rmc = withChecksum("$GNRMC,120000.00,A,3758.1234567,N,02343.5678901,E,0.01,0.0,051126,,,R,V");
-    n = nmeaReplacePosition(rmc.c_str(), rmc.size(), 37.5, 23.25, 0, out, sizeof(out));
-    CHECK(n > 0 && nmeaChecksumOk(out, n));
-    CHECK(strstr(out, ",3730.0000000,N,02315.0000000,E,") != nullptr);
-    std::string gll = withChecksum("$GNGLL,3758.1234567,N,02343.5678901,E,120000.00,A,R");
-    n = nmeaReplacePosition(gll.c_str(), gll.size(), 37.5, 23.25, 0, out, sizeof(out));
-    CHECK(n > 0 && strncmp(out, "$GNGLL,3730.0000000,N,02315.0000000,E,120000.00,A,R*", 52) == 0);
-    std::string gsa = withChecksum("$GNGSA,A,3,01,02,,,,,,,,,,,1.0,0.6,0.8,1");
-    CHECK(nmeaReplacePosition(gsa.c_str(), gsa.size(), 1, 1, 1, out, sizeof(out)) == 0);
+    // Movement hysteresis: moving after 3 s above 0.5 m/s, stationary after 10 s below 0.3 m/s
+    MethodTracker mv;
+    CorrInfo cn;
+    uint32_t tm = 1000;
+    for (int k = 0; k < 3; k++, tm += 1000) mv.update(tm, mkGga(1, -1), M_GNSS, 2, 3, r, cn, 10);
+    CHECK(!mv.moving());
+    mv.update(tm, mkGga(1, -1), M_GNSS, 2, 3, r, cn, 10); tm += 1000;
+    CHECK(mv.moving());
+    for (int k = 0; k < 5; k++, tm += 1000) mv.update(tm, mkGga(1, -1), M_GNSS, 2, 3, r, cn, 0.1f); // traffic light
+    CHECK(mv.moving());
+    for (int k = 0; k < 6; k++, tm += 1000) mv.update(tm, mkGga(1, -1), M_GNSS, 2, 3, r, cn, 0.1f);
+    CHECK(!mv.moving());
+    mv.update(tm, mkGga(1, -1), M_GNSS, 2, 3, r, cn, -1);
+    CHECK(mv.speed() < 0 && !mv.moving());
 }
 
 static void testHistory()
@@ -394,20 +395,28 @@ static void testHistory()
     CHECK(ggaTimeMs("") == 0);
     HistRec r{};
     r.ymd = 20261105; r.utcMs = 43200500; r.upSec = 1234; r.estH = 0.67f; r.estV = 1.0f; r.errH = -1; r.errV = -1;
-    r.lat = 37.9; r.lon = -23.7; r.alt = 280.5f; r.hdop = 0.6f; r.method = M_SBAS; r.sats = 30; r.hold = 0;
-    char line[200];
+    r.lat = 37.9; r.lon = -23.7; r.alt = 280.5f; r.hdop = 0.6f; r.method = M_SBAS; r.sats = 30;
+    r.speed = 12.5f; r.corrAge = -1; r.station = 124; r.flags = HF_LIVE | HF_MOVING;
+    char line[240];
     histCsvLine(r, line, sizeof(line));
-    CHECK(std::string(line) == "2026-11-05,12:00:00.5,1234,SBAS (EGNOS),0.670,1.000,,,37.900000000,-23.700000000,280.500,30,0.60,no\r\n");
+    CHECK(std::string(line) == "2026-11-05,12:00:00.5,1234,SBAS (EGNOS),live,,124,0.670,1.000,,,37.900000000,-23.700000000,280.500,12.50,yes,30,0.60\r\n");
+    HistRec k{};
+    k.ymd = 20261106; k.utcMs = 0; k.method = M_RTK_FIXED; k.corrAge = 85; k.station = 27; k.flags = 0; k.speed = -1;
+    k.estH = k.estV = k.errH = k.errV = -1;
+    histCsvLine(k, line, sizeof(line));
+    CHECK(strstr(line, ",RTK fixed,stale,85.0,27,") != nullptr && strstr(line, ",,,0,") != nullptr);
     HistRec b{}; b.ymd = HIST_RESTART; b.upSec = 2;
     histCsvLine(b, line, sizeof(line));
-    CHECK(std::string(line) == ",,2,restart,,,,,,,,,,\r\n");
+    CHECK(std::string(line) == ",,2,restart,,,,,,,,,,,,,,\r\n");
     // header and lines have the same number of columns
-    int ch = 0, cl = 0;
+    int ch = 0, cl = 0, cb = 0;
     for (const char *p = HIST_CSV_HEADER; *p; p++) ch += *p == ',';
     histCsvLine(r, line, sizeof(line));
     for (const char *p = line; *p; p++) cl += *p == ',';
-    CHECK(ch == cl && ch == 13);
-    CHECK(sizeof(HistRec) == 56);
+    histCsvLine(b, line, sizeof(line));
+    for (const char *p = line; *p; p++) cb += *p == ',';
+    CHECK(ch == cl && ch == cb && ch == 17);
+    CHECK(sizeof(HistRec) == 72);
 }
 
 int main()

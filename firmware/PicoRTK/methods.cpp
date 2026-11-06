@@ -73,6 +73,53 @@ Method classifyMethod(const GgaInfo &g, const PppNav *ppp, bool rtcmActive)
     }
 }
 
+CorrInfo correctionsFor(Method m, const GgaInfo &g, const PppNav *ppp, bool rtcmActive)
+{
+    CorrInfo c;
+    switch (m)
+    {
+    case M_RTK_FIXED:
+    case M_RTK_FLOAT:
+    case M_DGNSS:
+        c.live = rtcmActive;
+        c.age = g.age;
+        c.station = g.station;
+        break;
+    case M_HAS_CONV:
+    case M_HAS_DONE:
+        c.age = (ppp && ppp->diffAge >= 0) ? ppp->diffAge : g.age;
+        c.live = c.age >= 0 && c.age < 60; // HAS corrections arrive from the satellites every few seconds
+        c.station = 9002;
+        break;
+    case M_SBAS:
+        c.live = true;
+        c.age = g.age;
+        c.station = (g.station >= 120 && g.station <= 158) ? g.station : -1;
+        break;
+    default:
+        break;
+    }
+    return c;
+}
+
+float rmcSpeed(const char *s, size_t len)
+{
+    // field 7 of $xxRMC: speed over ground in knots
+    int f = 0;
+    size_t i = 0;
+    for (; i < len && f < 7; i++)
+        if (s[i] == ',')
+            f++;
+    if (f < 7 || i >= len || s[i] == ',' || s[i] == '*')
+        return -1;
+    char b[16];
+    size_t n = 0;
+    while (i < len && s[i] != ',' && s[i] != '*' && n < sizeof(b) - 1)
+        b[n++] = s[i++];
+    b[n] = 0;
+    return (float)(atof(b) * 0.514444);
+}
+
 void refError(const RefPoint &r, double lat, double lon, float alt, float &errH, float &errV)
 {
     if (!r.set)
@@ -87,7 +134,8 @@ void refError(const RefPoint &r, double lat, double lon, float alt, float &errH,
     errV = fabsf(alt - r.alt);
 }
 
-bool MethodTracker::update(uint32_t now, const GgaInfo &g, Method m, float estH, float estV, const RefPoint &ref, bool holdWanted)
+bool MethodTracker::update(uint32_t now, const GgaInfo &g, Method m, float estH, float estV, const RefPoint &ref,
+                           const CorrInfo &c, float speed)
 {
     if (m != _cur)
     {
@@ -116,46 +164,34 @@ bool MethodTracker::update(uint32_t now, const GgaInfo &g, Method m, float estH,
         s.estV = estV;
         s.errH = errH;
         s.errV = errV;
+        s.corr = c;
         if (estH >= 0 && (s.bestEstH < 0 || estH < s.bestEstH))
             s.bestEstH = estH;
     }
 
-    // Last SBAS position, for the static-demo hold
-    if (m == M_SBAS)
+    // Movement with hysteresis, so stops at traffic lights do not flip it every second
+    _speed = speed;
+    if (speed < 0)
+        _fastSince = _slowSince = 0;
+    else if (speed > 0.5f)
     {
-        _sbasPos.valid = true;
-        _sbasPos.lat = g.lat;
-        _sbasPos.lon = g.lon;
-        _sbasPos.alt = g.alt;
-        _sbasPos.estH = estH;
-        _sbasPos.atMs = now;
-    }
-
-    // Hold state: only while HAS converges; released for good (until HAS stops) once HAS is as good
-    bool hold = false;
-    if (m != M_HAS_CONV)
-        _released = false;
-    if (!holdWanted)
-        _holdReason = "off";
-    else if (m != M_HAS_CONV)
-        _holdReason = m == M_HAS_DONE ? "HAS converged" : "only while HAS converges";
-    else if (_released)
-        _holdReason = "HAS is now as good as SBAS";
-    else if (!_sbasPos.valid)
-        _holdReason = "no SBAS position yet";
-    else if (now - _sbasPos.atMs > HOLD_MAX_MS)
-        _holdReason = "SBAS position older than 30 min";
-    else if (estH >= 0 && _sbasPos.estH >= 0 && estH <= _sbasPos.estH)
-    {
-        _released = true;
-        _holdReason = "HAS is now as good as SBAS";
+        _slowSince = 0;
+        if (!_fastSince)
+            _fastSince = now ? now : 1;
+        if (now - _fastSince >= 3000)
+            _moving = true;
     }
     else
     {
-        hold = true;
-        _holdReason = "HAS still worse than the last SBAS fix";
+        _fastSince = 0;
+        if (speed < 0.3f)
+        {
+            if (!_slowSince)
+                _slowSince = now ? now : 1;
+            if (now - _slowSince >= 10000)
+                _moving = false;
+        }
     }
-    _holding = hold;
 
     // Trace, one sample every 10 s
     if (!_traceStarted || now - _lastTraceMs >= TRACE_STEP_MS)
@@ -186,8 +222,8 @@ static void numOrEmpty(char *o, size_t n, float v, int dec)
 size_t histCsvLine(const HistRec &r, char *out, size_t n)
 {
     if (r.ymd == HIST_RESTART)
-        return (size_t)snprintf(out, n, ",,%lu,restart,,,,,,,,,,\r\n", (unsigned long)r.upSec);
-    char d[16] = "", t[16] = "", a[4][16];
+        return (size_t)snprintf(out, n, ",,%lu,restart,,,,,,,,,,,,,,\r\n", (unsigned long)r.upSec);
+    char d[16] = "", t[16] = "", a[6][16];
     if (r.ymd)
         snprintf(d, sizeof(d), "%04lu-%02lu-%02lu", (unsigned long)(r.ymd / 10000), (unsigned long)(r.ymd / 100 % 100), (unsigned long)(r.ymd % 100));
     unsigned long ms = r.utcMs;
@@ -196,16 +232,24 @@ size_t histCsvLine(const HistRec &r, char *out, size_t n)
     numOrEmpty(a[1], 16, r.estV, 3);
     numOrEmpty(a[2], 16, r.errH, 3);
     numOrEmpty(a[3], 16, r.errV, 3);
-    const bool pos = r.method != M_NONE;
+    numOrEmpty(a[4], 16, r.corrAge, 1);
+    numOrEmpty(a[5], 16, r.speed, 2);
+    const Method m = (Method)r.method;
+    const int g = methodGroup(m);
+    const char *corr = (g < 0 || g == G_GNSS) ? "none" : (r.flags & HF_LIVE) ? "live" : "stale";
+    char st[8] = "";
+    if (r.station >= 0)
+        snprintf(st, sizeof(st), "%d", r.station);
     char la[20] = "", lo[20] = "", al[16] = "";
-    if (pos)
+    if (m != M_NONE)
     {
         snprintf(la, sizeof(la), "%.9f", r.lat);
         snprintf(lo, sizeof(lo), "%.9f", r.lon);
         snprintf(al, sizeof(al), "%.3f", r.alt);
     }
-    return (size_t)snprintf(out, n, "%s,%s,%lu,%s,%s,%s,%s,%s,%s,%s,%s,%u,%.2f,%s\r\n", d, t, (unsigned long)r.upSec,
-                            methodName((Method)r.method), a[0], a[1], a[2], a[3], la, lo, al, r.sats, r.hdop, r.hold ? "yes" : "no");
+    return (size_t)snprintf(out, n, "%s,%s,%lu,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%u,%.2f\r\n", d, t, (unsigned long)r.upSec,
+                            methodName(m), corr, a[4], st, a[0], a[1], a[2], a[3], la, lo, al, a[5],
+                            r.speed < 0 ? "" : (r.flags & HF_MOVING) ? "yes" : "no", r.sats, r.hdop);
 }
 
 uint32_t rmcDate(const char *s, size_t len)
@@ -240,96 +284,4 @@ const TraceSample &MethodTracker::trace(int i) const
 {
     int start = (_traceHead - _traceN + TRACE_N) % TRACE_N;
     return _tr[(start + i) % TRACE_N];
-}
-
-// ---- sentence rewriting for the hold ----
-
-static void fmtLat(double v, char *o, size_t n, char *hemi)
-{
-    *hemi = v < 0 ? 'S' : 'N';
-    v = fabs(v);
-    int d = (int)v;
-    double m = (v - d) * 60.0;
-    if (m >= 59.99999995) { d++; m = 0; }
-    snprintf(o, n, "%02d%010.7f", d, m);
-}
-static void fmtLon(double v, char *o, size_t n, char *hemi)
-{
-    *hemi = v < 0 ? 'W' : 'E';
-    v = fabs(v);
-    int d = (int)v;
-    double m = (v - d) * 60.0;
-    if (m >= 59.99999995) { d++; m = 0; }
-    snprintf(o, n, "%03d%010.7f", d, m);
-}
-
-size_t nmeaReplacePosition(const char *s, size_t len, double lat, double lon, float alt, char *out, size_t outSize)
-{
-    char id[NMEA_ID_MAX];
-    if (!nmeaSentenceId(s, len, id, sizeof(id)))
-        return 0;
-    int iLat;
-    bool gga = false, gns = false;
-    if (!strcmp(id, "GGA")) { iLat = 2; gga = true; }
-    else if (!strcmp(id, "GNS")) { iLat = 2; gns = true; }
-    else if (!strcmp(id, "RMC")) iLat = 3;
-    else if (!strcmp(id, "GLL")) iLat = 1;
-    else return 0;
-
-    // Split the body ($ ... before *) into fields
-    size_t end = 0;
-    while (end < len && s[end] != '*')
-        end++;
-    if (end >= len || s[0] != '$')
-        return 0;
-    static const int MAXF = 24;
-    const char *fs[MAXF];
-    size_t fl[MAXF];
-    int nf = 0;
-    size_t st = 1;
-    for (size_t i = 1; i <= end && nf < MAXF; i++)
-        if (i == end || s[i] == ',')
-        {
-            fs[nf] = s + st;
-            fl[nf] = i - st;
-            nf++;
-            st = i + 1;
-        }
-    if (nf <= iLat + 3)
-        return 0;
-
-    char la[20], lo[20], hl, ho, al[16];
-    fmtLat(lat, la, sizeof(la), &hl);
-    fmtLon(lon, lo, sizeof(lo), &ho);
-    snprintf(al, sizeof(al), "%.3f", alt);
-    char h1[2] = {hl, 0}, h2[2] = {ho, 0};
-
-    size_t o = 0;
-    auto put = [&](const char *p, size_t n) {
-        if (o + n < outSize) { memcpy(out + o, p, n); o += n; }
-        else o = outSize; // overflow marker
-    };
-    put("$", 1);
-    for (int i = 0; i < nf; i++)
-    {
-        if (i)
-            put(",", 1);
-        const char *rep = nullptr;
-        if (i == iLat) rep = la;
-        else if (i == iLat + 1) rep = h1;
-        else if (i == iLat + 2) rep = lo;
-        else if (i == iLat + 3) rep = h2;
-        else if (gga && i == 6) rep = "2";
-        else if ((gga || gns) && i == 9) rep = al;
-        else if ((gga && (i == 13 || i == 14)) || (gns && (i == 11 || i == 12))) rep = "";
-        if (rep)
-            put(rep, strlen(rep));
-        else
-            put(fs[i], fl[i]);
-    }
-    if (o >= outSize || o + 6 > outSize)
-        return 0;
-    uint8_t c = nmeaChecksum(out + 1, o - 1);
-    o += snprintf(out + o, outSize - o, "*%02X\r\n", c);
-    return o;
 }

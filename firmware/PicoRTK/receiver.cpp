@@ -10,6 +10,8 @@ SpscRing<1024> cmdToRx;
 SpscRing<16384> nmeaToNet;
 SpscRing<8192> histToCore0;
 static uint32_t rmcYmd = 0; // UTC date from the latest RMC
+static float rmcMps = -1;   // speed from the latest RMC (m/s)
+static uint32_t rmcAtMs = 0;
 SharedGga sharedGga;
 static SharedAccuracy sharedAcc;
 static MethodTracker tracker; // under ggaMutex
@@ -224,9 +226,10 @@ static void handleSentence(const char *s, size_t len)
             uint32_t d = rmcDate(s, len);
             if (d)
                 rmcYmd = d;
+            rmcMps = rmcSpeed(s, len);
+            rmcAtMs = millis();
         }
     }
-    static bool holding = false;
     if (nmeaIsGga(s, len))
     {
         GgaInfo g;
@@ -235,11 +238,14 @@ static void handleSentence(const char *s, size_t len)
             uint32_t now = millis();
             const PppNav *ppp = (sharedAcc.pppAtMs && now - sharedAcc.pppAtMs < 3000) ? &sharedAcc.ppp : nullptr;
             uint32_t lastRtcm = stats.lastRtcmToRxMs.load();
-            bool rtcmActive = lastRtcm && now - lastRtcm < 10000;
+            bool rtcmActive = lastRtcm && now - lastRtcm < 10000; // for telling a base from an EGNOS PRN
+            bool rtcmLive = lastRtcm && now - lastRtcm < 5000;    // "live" corrections: RTCM arrives every second
             diagC1 = 34;
             Method m = classifyMethod(g, ppp, rtcmActive);
             float eh, ev;
             estimateFor(m, now, eh, ev);
+            CorrInfo ci = correctionsFor(m, g, ppp, rtcmLive);
+            float speed = (rmcAtMs && now - rmcAtMs < 3000) ? rmcMps : -1;
             diagC1 = 35;
             mutex_enter_blocking(&ggaMutex);
             diagC1 = 36;
@@ -248,8 +254,8 @@ static void handleSentence(const char *s, size_t len)
             sharedGga.len = len;
             sharedGga.info = g;
             sharedGga.atMs = now;
-            bool sample = tracker.update(now, g, m, eh, ev, refPoint, cfg.holdSbas);
-            holding = tracker.holding();
+            bool sample = tracker.update(now, g, m, eh, ev, refPoint, ci, speed);
+            const bool moving = tracker.moving();
             const MethodStat &ms = tracker.stat(methodGroup(m) >= 0 ? methodGroup(m) : 0);
             mutex_exit(&ggaMutex);
             diagC1 = 37;
@@ -270,7 +276,10 @@ static void handleSentence(const char *s, size_t len)
                 r.hdop = g.hdop;
                 r.method = m;
                 r.sats = g.sats > 255 ? 255 : g.sats;
-                r.hold = holding;
+                r.speed = speed;
+                r.corrAge = ci.age;
+                r.station = (int16_t)ci.station;
+                r.flags = (ci.live ? HF_LIVE : 0) | (moving ? HF_MOVING : 0);
                 histToCore0.write((const uint8_t *)&r, sizeof(r)); // dropped if core 0 is stuck
                 diagC1 = 39;
             }
@@ -278,20 +287,7 @@ static void handleSentence(const char *s, size_t len)
     }
     diagC1 = 40;
     if (send)
-    {
-        // Static-demo hold: the apps get the last SBAS position while HAS is still worse
-        static char held[NMEA_MAX + 3];
-        size_t hn = 0;
-        if (holding)
-        {
-            MethodTracker *t = &tracker; // core 1 is the only writer, reading here is safe
-            hn = nmeaReplacePosition(s, len, t->holdLat(), t->holdLon(), t->holdAlt(), held, sizeof(held));
-        }
-        if (hn)
-            nmeaToNet.write((const uint8_t *)held, hn);
-        else
-            nmeaToNet.write((const uint8_t *)s, len); // dropped if nobody drains the ring
-    }
+        nmeaToNet.write((const uint8_t *)s, len); // as the receiver computed it; dropped if nobody drains the ring
 }
 
 void receiverLoop1()

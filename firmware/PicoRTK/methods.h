@@ -1,5 +1,6 @@
-// methods.h - which positioning method the receiver is using, per-method accuracy figures,
-// error against a reference point, a 30-minute trace, and the optional static-demo SBAS hold.
+// methods.h - which positioning method the receiver is using, where its corrections come from and
+// how old they are, per-method accuracy figures, error against a reference point, speed / movement,
+// a 30-minute trace and the history record format.
 // Portable (no Arduino calls), unit-tested on the PC.
 //
 // The LG290P computes ONE solution at a time. "Methods" here are the methods seen over time:
@@ -49,6 +50,19 @@ struct RefPoint
 // Horizontal and vertical distance of a position from the reference (m)
 void refError(const RefPoint &r, double lat, double lon, float alt, float &errH, float &errV);
 
+// Correction state of one epoch, as reported to the user
+struct CorrInfo
+{
+    bool live = false; // corrections are still arriving (RTCM in the last few seconds; HAS/SBAS from the sky)
+    float age = -1;    // age of the corrections in use (s), -1 = none / unknown
+    int station = -1;  // RTCM base id, 9002 = Galileo HAS, 120-158 = EGNOS satellite (PRN), -1 = none
+};
+// Fill CorrInfo for a method. rtcmActive = RTCM passed to the receiver in the last few seconds.
+CorrInfo correctionsFor(Method m, const GgaInfo &g, const PppNav *ppp, bool rtcmActive);
+
+// Speed from RMC (field 7, knots) in m/s; -1 when missing
+float rmcSpeed(const char *s, size_t len);
+
 struct MethodStat
 {
     bool seen = false;
@@ -57,6 +71,7 @@ struct MethodStat
     float estH = -1, estV = -1;       // receiver's estimate at the last epoch (-1 = none)
     float errH = -1, errV = -1;       // error against the reference at the last epoch (-1 = no reference)
     float bestEstH = -1;              // best estimate during the latest run
+    CorrInfo corr;                    // corrections at the last epoch
 };
 
 struct TraceSample
@@ -71,73 +86,58 @@ static const uint32_t TRACE_STEP_MS = 10000;
 class MethodTracker
 {
   public:
-    // One epoch (per GGA). estH/estV = receiver estimate (-1 none). holdWanted = static-demo hold enabled.
+    // One epoch (per GGA). estH/estV = receiver estimate (-1 none); speed in m/s (-1 unknown).
     // Returns true when this epoch was added to the trace (one every 10 s): also the moment to log it.
-    bool update(uint32_t nowMs, const GgaInfo &g, Method m, float estH, float estV, const RefPoint &ref, bool holdWanted);
+    bool update(uint32_t nowMs, const GgaInfo &g, Method m, float estH, float estV, const RefPoint &ref, const CorrInfo &c,
+                float speed);
 
     Method current() const { return _cur; }
     uint32_t currentSinceMs() const { return _curSince; }
     const MethodStat &stat(int grp) const { return _st[grp]; }
 
-    // Static-demo hold: while HAS converges and its estimate is worse than the last SBAS one,
-    // the app output carries the last SBAS position instead.
-    bool holding() const { return _holding; }
-    bool holdReady() const { return _sbasPos.valid; } // an SBAS position exists to hold
-    uint32_t holdFromMs() const { return _sbasPos.atMs; }
-    float holdEstH() const { return _sbasPos.estH; }
-    double holdLat() const { return _sbasPos.lat; }
-    double holdLon() const { return _sbasPos.lon; }
-    float holdAlt() const { return _sbasPos.alt; }
-    const char *holdReason() const { return _holdReason; }
+    // Movement, with hysteresis: moving above 0.5 m/s for 3 s, stationary below 0.3 m/s for 10 s
+    float speed() const { return _speed; }
+    bool moving() const { return _moving; }
 
     int traceCount() const { return _traceN; }
     const TraceSample &trace(int i) const; // 0 = oldest
-
-    static const uint32_t HOLD_MAX_MS = 30u * 60u * 1000u; // never hold a position older than this
 
   private:
     Method _cur = M_NONE;
     uint32_t _curSince = 0;
     MethodStat _st[G_COUNT];
-    struct
-    {
-        bool valid = false;
-        double lat = 0, lon = 0;
-        float alt = 0, estH = -1;
-        uint32_t atMs = 0;
-    } _sbasPos;
-    bool _holding = false, _released = false;
-    const char *_holdReason = "";
+    float _speed = -1;
+    bool _moving = false;
+    uint32_t _fastSince = 0, _slowSince = 0;
     TraceSample _tr[TRACE_N];
     int _traceN = 0, _traceHead = 0;
     uint32_t _lastTraceMs = 0;
     bool _traceStarted = false;
-    float _trEst = -1, _trErr = -1; // worst values since the last sample
-    uint8_t _trMethod = M_NONE;
 };
 
-// One history record (kept in flash across restarts), written every 10 s
+// One history record (kept in flash across restarts), written every 10 s. Format 2 (72 bytes).
 struct HistRec
 {
-    double lat, lon;   // first, so the record packs to 56 bytes
-    uint32_t ymd;      // UTC date as yyyymmdd from RMC, 0 = not known yet; 0xFFFFFFFF = restart marker
-    uint32_t utcMs;    // UTC time of day (ms) from GGA
-    uint32_t upSec;    // uptime
+    double lat, lon;
+    uint32_t ymd;   // UTC date as yyyymmdd from RMC, 0 = not known yet; 0xFFFFFFFF = restart marker
+    uint32_t utcMs; // UTC time of day (ms) from GGA
+    uint32_t upSec; // uptime
     float estH, estV, errH, errV; // -1 = none
     float alt, hdop;
-    uint8_t method, sats, hold, flags;
+    float speed;   // m/s, -1 = unknown
+    float corrAge; // s, -1 = none
+    int16_t station;
+    uint8_t method, sats;
+    uint8_t flags; // HF_LIVE, HF_MOVING
 };
+static const uint8_t HF_LIVE = 1, HF_MOVING = 2;
 static const uint32_t HIST_RESTART = 0xFFFFFFFFu;
 static const char HIST_CSV_HEADER[] =
-    "date_utc,time_utc,uptime_s,method,est_h_m,est_v_m,err_h_m,err_v_m,lat_deg,lon_deg,alt_msl_m,sats,hdop,apps_get_held_sbas\r\n";
+    "date_utc,time_utc,uptime_s,method,corrections,correction_age_s,base_or_prn,est_h_m,est_v_m,err_h_m,err_v_m,"
+    "lat_deg,lon_deg,alt_msl_m,speed_mps,moving,sats,hdop\r\n";
 // One CSV line for a record. Returns its length.
 size_t histCsvLine(const HistRec &r, char *out, size_t outSize);
 // RMC date field ddmmyy -> yyyymmdd (0 when missing)
 uint32_t rmcDate(const char *s, size_t len);
 // GGA time hhmmss.ss -> ms of day (0 when missing)
 uint32_t ggaTimeMs(const char *utc);
-
-// Rewrite the position in a GGA, RMC, GLL or GNS sentence with a held position.
-// GGA/GNS also get the altitude, quality 2 (SBAS) and empty correction age / station.
-// Returns the new length, or 0 when the sentence is not one of these (send the original).
-size_t nmeaReplacePosition(const char *s, size_t len, double lat, double lon, float alt, char *out, size_t outSize);

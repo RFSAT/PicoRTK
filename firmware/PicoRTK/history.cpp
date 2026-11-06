@@ -6,7 +6,8 @@
 #include "diag.h"
 #include <LittleFS.h>
 
-static const char *F_NEW = "/hist0.bin", *F_OLD = "/hist1.bin";
+// Format 2 records (72 bytes); older format files are removed at start-up
+static const char *F_NEW = "/hist2a.bin", *F_OLD = "/hist2b.bin";
 static const int BUF_N = 40;
 static HistRec buf[BUF_N];
 static int bufN = 0;
@@ -51,6 +52,9 @@ static void add(const HistRec &r)
 
 void historySetup()
 {
+    for (const char *old : {"/hist0.bin", "/hist1.bin"})
+        if (LittleFS.exists(old))
+            LittleFS.remove(old);
     HistRec r{};
     r.ymd = HIST_RESTART;
     r.upSec = millis() / 1000;

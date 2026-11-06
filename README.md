@@ -197,7 +197,7 @@ The **Corrections** switch on the Home page changes the mode at once, without a 
 
 HAS is set in the receiver with `$PQTMCFGPPP,W,2,1,120,0.10,0.15` (E6 HAS, WGS84, 120 s timeout, converged at 0.10 m horizontal and 0.15 m vertical). It is sent at every start-up and on every mode change; turning the fallback off sends `$PQTMCFGPPP,W,0`. HAS needs LG290P firmware with PPP support. If the receiver answers `$PQTMCFGPPP,ERROR`, which shows in the NMEA live view, update it with QGNSS.
 
-### Methods panel, reference point and static-demo hold
+### Methods tab: methods, corrections, reference point, movement
 
 The LG290P computes **one** position at a time. It cannot run SBAS and Galileo HAS side by side: once HAS corrections arrive, its GGA carries the HAS solution, converging or not (the protocol has no option to keep SBAS meanwhile). The **Methods** tab therefore shows the methods over time:
 
@@ -205,13 +205,15 @@ The LG290P computes **one** position at a time. It cannot run SBAS and Galileo H
 - **Estimated H · V** is the receiver's own figure (PQTMPPPNAV for HAS, otherwise PQTMEPE or GST). **Actual error H · V** is the distance from the reference point.
 - **Reference point:** press *Set reference from RTK fix* while the receiver has RTK fixed (the button is disabled otherwise), then leave the antenna where it is. It is saved; *Clear reference* removes it. The API also accepts `force` for a point taken from any fix (`POST /api/ref` with `set`, `force` or `clear`).
 - **Trace:** the last 30 minutes, one sample every 10 s, estimate (solid) and actual error (dashed) on a background coloured by method (`GET /api/trace`).
-- **Static-demo hold** (off by default, `POST /api/hold` with `on` / `off`): while HAS is converging and its estimate is worse than the last SBAS fix, the Bluetooth and TCP outputs carry that last SBAS position in GGA, RMC, GLL and GNS (GGA quality 2, no station). It releases as soon as HAS is as good as SBAS (or converged) and never holds a position older than 30 minutes. The page says "Apps receive: the held SBAS position ..." while it holds. Proprietary PQTM messages are passed unchanged, and USB always carries the receiver's raw stream. **Only for an antenna that does not move.**
+- **Corrections** for each method: RTK and DGNSS show the base station, the age of the corrections and whether they are **live** (RTCM reached the receiver in the last 5 s) or **stale** (RTCM has stopped; the receiver keeps using the last data for up to about 2 minutes by default, `PQTMCFGRTK` timeout). HAS shows the age of its E6 corrections, SBAS the EGNOS satellite (PRN). The Home page says "RTK fixed (stale corrections)" in that case.
+- **Speed and movement** from RMC: moving above 0.5 m/s for 3 s, stationary below 0.3 m/s for 10 s, so a stop at traffic lights does not flip it.
+- Positions go to the apps **exactly as the receiver computes them**: nothing is held or replaced, so tests show real behaviour. The switching between methods is the receiver's own.
 
 ### History in flash
 
-The Methods tab also keeps a **history**: one record every 10 s with the UTC date and time, uptime, method, estimated and actual error, position, satellites, HDOP, and whether the apps got a held SBAS position.
+The Methods tab also keeps a **history**: one record every 10 s with the UTC date and time, uptime, method, corrections (live / stale / none), correction age, base station or EGNOS PRN, estimated and actual error, position, speed, moving, satellites and HDOP.
 
-- Stored in the Pico's flash (`/hist0.bin`, `/hist1.bin`, 56 bytes a record, up to 768 KB, about 39 hours). When full, the oldest records go first.
+- Stored in the Pico's flash (`/hist2a.bin`, `/hist2b.bin`, 72 bytes a record, up to 768 KB, about 30 hours). History in the earlier format is deleted when this version starts. When full, the oldest records go first.
 - Written every 5 minutes and at *Shut down* / restart from the page, so pulling the power loses at most the last 5 minutes. Each start-up adds a `restart` line.
 - **Download CSV** (`GET /api/history.csv`) sends everything, oldest first. While it is sent (a few seconds), the correction stream and Bluetooth/TCP pause. **Clear history** (`POST /api/history/clear`) deletes it. `GET /api/history` returns the record count and time span.
 - Flashing a new UF2 keeps the history, like the settings.

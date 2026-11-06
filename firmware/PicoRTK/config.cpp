@@ -115,7 +115,6 @@ String configToJson(bool withSecrets)
     JsonObject cm = d["corrections"].to<JsonObject>();
     cm["mode"] = cfg.mode;
     cm["galileoHas"] = cfg.galileoHas;
-    cm["holdSbas"] = cfg.holdSbas;
     JsonObject rp = d["reference"].to<JsonObject>();
     rp["set"] = cfg.refSet;
     rp["lat"] = serialized(String(cfg.refLat, 9));
@@ -267,7 +266,6 @@ bool configFromJson(const String &json, String &err)
     {
         getStr(cm["mode"], c.mode);
         getNum(cm["galileoHas"], c.galileoHas);
-        getNum(cm["holdSbas"], c.holdSbas);
     }
     JsonVariantConst rp = d["reference"];
     if (!rp.isNull())

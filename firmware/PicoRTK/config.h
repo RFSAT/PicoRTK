@@ -37,9 +37,6 @@ struct Config
     //                  "has" = Galileo HAS from the satellites only, NTRIP off (no internet needed)
     String mode = "rtk";
     bool galileoHas = true; // Galileo HAS (PPP) enabled in the receiver; always on in "has" mode
-    // Static demos only: while HAS converges and is worse than the last SBAS fix, send that SBAS
-    // position to the apps instead (GGA, RMC, GLL, GNS). Wrong on a moving receiver, so off by default.
-    bool holdSbas = false;
 
     // Reference point (surveyed antenna position, e.g. recorded from an RTK fixed solution):
     // the Home page shows each method's actual error against it

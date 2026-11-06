@@ -61,7 +61,7 @@ struct SharedAccuracy
 };
 void getAccuracy(SharedAccuracy &out);
 
-// Positioning methods seen over time, reference point and static-demo hold (core 1 writes, core 0 reads)
+// Positioning methods seen over time, their corrections, reference point, movement (core 1 writes, core 0 reads)
 #include "methods.h"
 void getMethods(MethodTracker &out, RefPoint &ref);
 // core 1 -> core 0: one HistRec every 10 s for the flash history

@@ -111,7 +111,7 @@ static void handleStatus()
         p["sats"] = a.ppp.satUsed;
     }
 
-    // Methods over time (the receiver computes one at a time), reference point, static-demo hold
+    // Methods over time (the receiver computes one at a time), their corrections, reference point, movement
     {
         static MethodTracker mt; // large: keep it off the stack
         RefPoint rp;
@@ -120,6 +120,8 @@ static void handleStatus()
         m["current"] = methodName(mt.current());
         m["currentCode"] = (int)mt.current();
         m["currentForSec"] = (now - mt.currentSinceMs()) / 1000;
+        if (mt.speed() >= 0) m["speed"] = mt.speed();
+        m["moving"] = mt.moving();
         int curGrp = methodGroup(mt.current());
         JsonArray ga = m["groups"].to<JsonArray>();
         for (int i = 0; i < G_COUNT; i++)
@@ -139,6 +141,10 @@ static void handleStatus()
             if (st.errH >= 0) o["errH"] = st.errH;
             if (st.errV >= 0) o["errV"] = st.errV;
             if (st.bestEstH >= 0) o["bestEstH"] = st.bestEstH;
+            JsonObject c = o["corr"].to<JsonObject>();
+            c["live"] = st.corr.live;
+            if (st.corr.age >= 0) c["age"] = st.corr.age;
+            if (st.corr.station >= 0) c["station"] = st.corr.station;
         }
         JsonObject r = m["ref"].to<JsonObject>();
         r["set"] = rp.set;
@@ -147,15 +153,6 @@ static void handleStatus()
             r["lat"] = serialized(String(rp.lat, 9));
             r["lon"] = serialized(String(rp.lon, 9));
             r["alt"] = rp.alt;
-        }
-        JsonObject h = m["hold"].to<JsonObject>();
-        h["enabled"] = cfg.holdSbas;
-        h["active"] = mt.holding();
-        h["reason"] = mt.holdReason();
-        if (mt.holdReady())
-        {
-            h["sbasAgoSec"] = (now - mt.holdFromMs()) / 1000;
-            if (mt.holdEstH() >= 0) h["sbasEstH"] = mt.holdEstH();
         }
     }
 
@@ -371,25 +368,6 @@ void webSetup()
         setRefPoint(r);
         server.send(200, "text/plain", r.set ? "Reference point recorded at the current position." : "Reference point cleared.");
     });
-    // Static-demo hold of the last SBAS position: "on" / "off"
-    server.on("/api/hold", HTTP_POST, []() {
-        if (!auth())
-            return;
-        String a = server.arg("plain");
-        a.trim();
-        if (a != "on" && a != "off")
-        {
-            server.send(400, "text/plain", "Use on or off");
-            return;
-        }
-        cfg.holdSbas = a == "on";
-        if (!configSave())
-        {
-            server.send(500, "text/plain", "Could not write the settings to flash");
-            return;
-        }
-        server.send(200, "text/plain", cfg.holdSbas ? "Static-demo hold on: only for an antenna that does not move." : "Hold off.");
-    });
     // Accuracy trace: last 30 min, one sample every 10 s: [uptime s, method code, estimate H, error H] (-1 = none)
     server.on("/api/trace", HTTP_GET, []() {
         if (!auth())
@@ -429,6 +407,7 @@ void webSetup()
         d["records"] = historyRecords();
         d["bytes"] = historyBytes();
         d["capacityRecords"] = 2 * HIST_FILE_MAX / sizeof(HistRec);
+        d["recordBytes"] = sizeof(HistRec);
         d["stepSec"] = TRACE_STEP_MS / 1000;
         d["firstYmd"] = fy;
         d["firstMs"] = fm;
