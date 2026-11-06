@@ -219,6 +219,14 @@ A sky plot and the signal strength of every satellite and band, from the receive
 - GSV and GSA must be on in the receiver (NMEA tab); the tab says so when they are missing.
 - **No lock yet:** a satellite that loses lock stays on the plot, grey, for up to 10 minutes. The live sky is also saved to flash with every history write (`/sky.bin`), so after a restart the plot starts with the previous run's satellites, grey and dashed, with the time they were taken; each is replaced as the receiver locks on, and the rest disappear 3 minutes after live data starts. They have moved since (about 0.5° a minute for GPS), so they show roughly where to expect satellites, not where they are.
 
+### Events
+
+The Home page's **Events** list (correction events such as connections, failovers and caster errors, plus start-up, Restart and Shut down) is kept in flash (`/events.log`) and grouped by session, one session per run from start-up to restart or power-off. Newest first; each event has its UTC time (once the receiver has given one) and the uptime.
+
+- Every event of the current session is kept. When the log reaches 64 KB, the oldest earlier sessions are removed first. Only if the current session alone fills it are its oldest events removed, with a line saying how many.
+- Written to flash every 30 s and at Restart / Shut down from the page, so pulling the power loses at most 30 s of events.
+- The page reloads the list only when there is a new event, and keeps your scroll position while new events arrive. `GET /api/log` returns the raw log.
+
 ### History in flash
 
 The Methods tab also keeps a **history**: one record every 10 s with the UTC date and time, uptime, method, corrections (live / stale / none), correction age, base station or EGNOS PRN, estimated and actual error, position, speed, moving, satellites and HDOP.

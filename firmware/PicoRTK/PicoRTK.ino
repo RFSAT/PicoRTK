@@ -18,6 +18,7 @@
 #include "web.h"
 #include <LittleFS.h>
 #include "history.h"
+#include "eventlog.h"
 #include "diag.h"
 #include <WiFi.h>
 #include <hardware/gpio.h>
@@ -54,6 +55,8 @@ static const uint32_t CORE0_STALL_MS = 60000;  // longest blocking call on core 
 void safeReboot()
 {
     diagC0 = DIAG_CLEAN;
+    eventAdd("restart requested from the page");
+    eventsFlush();
     historyFlush(); // keep the last minutes of history
     // Safety net first: whatever happens below, the watchdog resets the chip within 3 s
     wdtArmed = false;
@@ -74,6 +77,8 @@ void safeShutdown()
 {
     dbg("[boot] shutting down\r\n");
     diagC0 = DIAG_CLEAN;
+    eventAdd("shut down from the page");
+    eventsFlush();
     historyFlush();
     ntripStop();
     outputsStop();
@@ -140,6 +145,12 @@ void setup()
     }
     diagC0 = 105;
     historySetup();
+    eventsSetup();
+    {
+        char m[200];
+        snprintf(m, sizeof(m), "start-up: firmware %s, last reset: %s; previous run %s", PICORTK_VERSION, bootReason, diagText().c_str());
+        eventAdd(m);
+    }
     diagC0 = 106;
     dbg("[boot] settings loaded, Bluetooth %s\r\n", cfg.bt.c_str());
     configReady = true; // core 1 may start the UART now
@@ -237,6 +248,7 @@ void loop()
     logStatus();
     diagC0 = 8;
     historyLoop();
+    eventsLoop();
     diagC0 = 9;
 
     if (bootCmdsAt && (int32_t)(millis() - bootCmdsAt) > 0)

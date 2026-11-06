@@ -2,6 +2,7 @@
 #include "web.h"
 #include "config.h"
 #include "history.h"
+#include "eventlog.h"
 #include "diag.h"
 #include "net.h"
 #include "ntrip.h"
@@ -52,6 +53,7 @@ static void handleStatus()
     d["uptimeSec"] = now / 1000;
     extern const char *bootReason;
     d["lastReset"] = bootReason;
+    d["eventSeq"] = eventsSeq();
     d["previousRun"] = diagText();
     d["previousRunProblem"] = diagProblem();
     d["device"] = cfg.deviceName;
@@ -260,7 +262,8 @@ static void handleLog()
     if (!auth())
         return;
     String s;
-    ntripEventLog(s);
+    eventsText(s);
+    server.sendHeader("Cache-Control", "no-store");
     server.send(200, "text/plain", s);
 }
 

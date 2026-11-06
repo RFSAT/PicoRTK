@@ -173,7 +173,10 @@ dt[data-help],th[data-help]{text-decoration:underline dotted var(--muted);text-u
     <section><h2>Corrections</h2><dl class="kv" id="sNtrip"></dl></section>
     <section><h2>Links</h2><dl class="kv" id="sLinks"></dl></section>
   </div>
-  <section><h2>Correction events</h2><pre id="log">…</pre></section>
+  <section><h2>Events</h2>
+    <p class="hint" style="margin:0 0 6px" data-help="Correction and system events, kept in the Pico's flash across restarts and grouped by session (one session = from start-up to restart or power-off). Every event of the current session is kept; when the log is full (64 KB), the oldest earlier sessions are removed first. Written to flash every 30 s and at Restart / Shut down.">Newest first, grouped by session; kept across restarts.</p>
+    <p class="hint" id="lastGga" style="margin:0 0 6px;font-family:var(--mono);font-size:12px"></p>
+    <pre id="log">…</pre></section>
 </div>
 <div data-page="methods" hidden>
   <section>
@@ -433,7 +436,8 @@ async function status(){
       ["NMEA good / bad",u.nmeaGood+" / "+u.nmeaBad],["Dropped (queues full)",u.drops]]);
     document.querySelectorAll("#sources tr").forEach((el,i)=>el.classList.toggle("active",i===n.source-1));
     renderMethods(s);
-    $("log").textContent=(await (await fetch("/api/log")).text()||"No events yet")+(n.lastGga?"\nLast GGA sent to the caster: "+n.lastGga:"");
+    $("lastGga").textContent=n.lastGga?"Last GGA sent to the caster: "+n.lastGga:"";
+    if(s.eventSeq!==logSeq){logSeq=s.eventSeq;renderLog(await (await fetch("/api/log")).text())}
   }catch(e){$("hdr").textContent="device not reachable"}
 }
 
@@ -616,6 +620,28 @@ async function readFixRate(){
 }
 renderProfiles();
 $("nmeaPause").onclick=()=>{nmeaPaused=!nmeaPaused;$("nmeaPause").textContent=nmeaPaused?"Resume":"Pause"};
+// ---- Events (from /api/log): newest first, grouped by session ----
+let logSeq=-1;
+const hms=s=>[s/3600|0,(s/60|0)%60,s%60].map(v=>String(v).padStart(2,"0")).join(":");
+function renderLog(txt){
+  const ses=new Map(); let cur=0;
+  for(const ln of txt.split("\n")){if(!ln)continue;const f=ln.split("\t");
+    if(f[0]==="C"){cur=+f[1];continue}
+    const n=+f[1];if(!ses.has(n))ses.set(n,{fw:"",ev:[],dropped:0});const S=ses.get(n);
+    if(f[0]==="S")S.fw=f[2]||"";else if(f[0]==="D")S.dropped=+f[2];
+    else if(f[0]==="E")S.ev.push({up:+f[2],utc:f[3]==="-"?0:+f[3],msg:f.slice(4).join(" ")})}
+  const out=[];
+  for(const n of [...ses.keys()].sort((a,b)=>b-a)){const S=ses.get(n);
+    const first=S.ev.find(e=>e.utc), start=first?new Date((first.utc-first.up)*1000).toISOString().slice(0,16).replace("T"," ")+" UTC":"";
+    out.push(`── ${n===cur?"This session":"Session "+n}${start?", started "+start:""}${S.fw?" · firmware "+S.fw:""} ──`);
+    for(const e of S.ev.slice().reverse())out.push(`${e.utc?new Date(e.utc*1000).toISOString().slice(11,19)+" UTC":"        –   "}  up ${hms(e.up)}  ${e.msg}`);
+    if(S.dropped)out.push(`(${S.dropped} earlier events of this session removed: log full)`);
+    out.push("")}
+  const el=$("log"), top=el.scrollTop, h=el.scrollHeight;
+  el.textContent=out.join("\n").trim()||"No events yet";
+  if(top>0)el.scrollTop=top+(el.scrollHeight-h); // stay on what you were reading while new events arrive on top
+}
+
 // ---- Methods panel ----
 const METHCOL={0:"#9aa5a3",1:"#9aa5a3",2:"#d39b2a",3:"#6a8fd6",4:"#3aa0c8",5:"#1d7a3a",6:"#8e6bd6",7:"#5b3fb0",8:"#9aa5a3"};
 const METHNAME={0:"No fix",1:"GNSS only",2:"SBAS (EGNOS)",3:"DGNSS (RTCM)",4:"RTK float",5:"RTK fixed",6:"HAS converging",7:"HAS converged",8:"Dead reckoning"};
@@ -857,10 +883,10 @@ const KVHELP={
   "Last frame":"Time since the last valid RTCM frame from the caster.",
   "Bytes on stream":"Bytes received on the current connection. Stuck at 0 with a 200 OK reply usually means the mount point needs a position (GGA).",
   "Frames / CRC errors":"Valid RTCM frames since start-up, and frames rejected by the CRC check.",
-  "GGA sent":"Positions sent to casters since start-up, and the UTC time of the last one. The full sentence is at the end of Correction events.",
+  "GGA sent":"Positions sent to casters since start-up, and the UTC time of the last one. The full sentence is shown above Events.",
   "Base id (1005)":"Reference station id from RTCM message 1005/1006 in the correction stream.",
   "Failovers":"Number of source changes since start-up.",
-  "Last event":"Latest correction event; the full list is under Correction events.",
+  "Last event":"Latest correction event; the full list is under Events.",
   "Bluetooth":"Bluetooth name and mode, and whether an app is connected.",
   "TCP clients":"Clients connected to the NMEA TCP port.",
   "Wi-Fi signal":"Signal strength of the joined network. Above -70 dBm is good; below -80 dBm is unreliable.",

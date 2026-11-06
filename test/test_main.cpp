@@ -3,6 +3,7 @@
 // Build: g++ -std=c++17 -Wall -I../firmware/PicoRTK test_main.cpp ../firmware/PicoRTK/{nmea,rtcm,selector,ntrip_proto,methods}.cpp -o t && ./t
 #include "methods.h"
 #include "sky.h"
+#include "evtrim.h"
 #include "nmea.h"
 #include "ntrip_proto.h"
 #include "ring.h"
@@ -500,8 +501,35 @@ static void testSky()
     CHECK(nKept == 0);
 }
 
+static void testEvTrim()
+{
+    std::string a = "S\t1\t-\nE\t1\t10\t-\told one\nE\t1\t20\t-\told two\n";
+    std::string b = "S\t2\t-\nE\t2\t5\t-\tnew one\nE\t2\t6\t-\tnew two\n";
+    CHECK(evTrim(a + b, 2, 1000) == a + b);                      // fits: unchanged
+    std::string t1 = evTrim(a + b, 2, b.size() + 10);
+    CHECK(t1 == b);                                              // earlier session dropped first
+    std::string t2 = evTrim(a + b, 2, (a + b).size() - 18);
+    CHECK(t2.find("old one") == std::string::npos && t2.find("old two") != std::string::npos && t2.find("new one") != std::string::npos);
+    // current session alone too big: its oldest events go, with a marker after its start line
+    std::string big = "S\t3\t-\n";
+    for (int i = 0; i < 20; i++) big += "E\t3\t" + std::to_string(i) + "\t-\tevent number " + std::to_string(i) + "\n";
+    std::string t3 = evTrim(a + big, 3, 200);
+    CHECK(t3.size() <= 200);
+    CHECK(t3.compare(0, 6, "S\t3\t-\n") == 0 && t3.find("D\t3\t") == 6);
+    CHECK(t3.find("event number 19") != std::string::npos && t3.find("event number 0\n") == std::string::npos);
+    // a second trim adds to the dropped count instead of a second marker
+    std::string t4 = evTrim(t3 + "E\t3\t97\t-\tone more event here\nE\t3\t98\t-\tand another event\n", 3, 200);
+    CHECK(t4.size() <= 200 && t4.find("and another event") != std::string::npos);
+    size_t d1 = t4.find("D\t3\t"), d2 = t4.find("D\t3\t", d1 + 1);
+    CHECK(d1 != std::string::npos && d2 == std::string::npos);
+    int n3 = atoi(t3.c_str() + t3.find("D\t3\t") + 4), n4 = atoi(t4.c_str() + d1 + 4);
+    CHECK(n4 > n3);
+    CHECK(evSession("E\t42\tx", 6) == 42 && evSession("x", 1) == 0);
+}
+
 int main()
 {
+    testEvTrim();
     testSky();
     testHistory();
     testMethods();

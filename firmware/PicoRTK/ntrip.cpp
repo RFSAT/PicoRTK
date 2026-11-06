@@ -1,5 +1,6 @@
 // ntrip.cpp - core 0: NTRIP client with ordered sources and failover
 #include "ntrip.h"
+#include "eventlog.h"
 #include "config.h"
 #include "ntrip_proto.h"
 #include "shared.h"
@@ -53,6 +54,7 @@ static void event(const char *fmt, ...)
     if (logCount < LOG_N)
         logCount++;
     dbg("[ntrip] %s\r\n", msg);
+    eventAdd(msg); // kept in flash, by session
 }
 
 void ntripEventLog(String &out)
