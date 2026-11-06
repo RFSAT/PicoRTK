@@ -609,21 +609,43 @@ function renderMethods(s){
   $("refSet").title=M.currentCode===5?"":"Needs RTK fixed (now: "+M.current+")";
   if(!$("trace").closest("[data-page]").hidden){if(Date.now()-lastTrace>10000){lastTrace=Date.now();drawTrace()}if(Date.now()-histAt>30000)histInfo()}
 }
+// Axis label: nice values only, so no two labels can read the same
+const axLab=v=>v===0?"0":v>=1?(+v.toPrecision(3))+" m":(+(v*100).toPrecision(3))+" cm";
 async function drawTrace(){
   let d; try{d=await (await fetch("/api/trace")).json()}catch(e){return}
-  const svg=$("trace"), W=svg.clientWidth||600, Hh=svg.clientHeight||150, L=44, R=6, T=6, B=18, sm=d.samples||[];
-  const span=1800, t0=d.now-span, x=t=>L+(t-t0)/span*(W-L-R);
-  const vals=sm.flatMap(p=>[p[2],p[3]]).filter(v=>v>=0);
-  const top=Math.max(0.05,...vals)*1.15, lg=top>2, y=v=>T+(1-(lg?Math.log10(v*100+1)/Math.log10(top*100+1):v/top))*(Hh-T-B);
-  let g=`<rect x="${L}" y="${T}" width="${W-L-R}" height="${Hh-T-B}" fill="none" stroke="var(--line)"/>`;
-  for(let i=0;i<sm.length;i++){const a=sm[i],b=sm[i+1],xa=x(a[0]),xb=b?x(b[0]):x(d.now);if(xb>L)g+=`<rect x="${Math.max(L,xa)}" y="${T}" width="${Math.max(0,xb-Math.max(L,xa))}" height="${Hh-T-B}" fill="${METHCOL[a[1]]}" opacity=".18"><title>${METHNAME[a[1]]}</title></rect>`}
-  const line=(k,dash)=>{let p="",pen=false;for(const s of sm){if(s[k]<0){pen=false;continue}p+=(pen?"L":"M")+x(s[0]).toFixed(1)+" "+y(s[k]).toFixed(1);pen=true}return p?`<path d="${p}" fill="none" stroke="var(--ink)" stroke-width="1.5"${dash?' stroke-dasharray="4 3"':""}/>`:""};
+  const svg=$("trace"), W=svg.clientWidth||600, Hh=svg.clientHeight||150, L=50, R=6, T=6, B=18, sm=d.samples||[];
+  const span=1800, t0=d.now-span, x=t=>L+(t-t0)/span*(W-L-R), ph=Hh-T-B;
+  const vals=sm.flatMap(p=>[p[2],p[3]]).filter(v=>v>0);
+  const hi=Math.max(0.05,...vals), lo=vals.length?Math.min(...vals):hi;
+  // Logarithmic when the values span more than a factor of 20 (e.g. RTK centimetres and SBAS metres), else linear from 0
+  const lg=hi/lo>20;
+  let y, ticks=[];
+  if(lg){
+    const a=Math.floor(Math.log10(lo)), b=Math.ceil(Math.log10(hi*1.05)), la=Math.log10(10**a), lb=Math.log10(10**b);
+    y=v=>T+(1-(Math.log10(Math.max(v,10**a))-la)/(lb-la))*ph;
+    for(let e=a;e<=b;e++)for(const m of [1,2,5]){const v=m*10**e;if(v<=10**b)ticks.push({v,major:m===1})}
+    // label the 2 and 5 lines only when a decade is tall enough
+    const dec=ph/(b-a); ticks.forEach(t=>t.label=t.major||dec>=60);
+  }else{
+    const top=hi*1.1, raw=top/5, p10=10**Math.floor(Math.log10(raw)), step=[1,2,5,10].map(m=>m*p10).find(s=>s>=raw);
+    const max=Math.ceil(top/step)*step;
+    y=v=>T+(1-v/max)*ph;
+    for(let v=0;v<=max+step/2;v+=step)ticks.push({v:+v.toPrecision(6),major:true,label:true});
+  }
+  let g="";
+  for(let i=0;i<sm.length;i++){const a=sm[i],b=sm[i+1],xa=x(a[0]),xb=b?x(b[0]):x(d.now);if(xb>L)g+=`<rect x="${Math.max(L,xa)}" y="${T}" width="${Math.max(0,xb-Math.max(L,xa))}" height="${ph}" fill="${METHCOL[a[1]]}" opacity=".16"><title>${METHNAME[a[1]]}</title></rect>`}
+  for(const t of ticks){const yy=y(t.v).toFixed(1);
+    g+=`<line x1="${L}" x2="${W-R}" y1="${yy}" y2="${yy}" stroke="#9aa5a3" stroke-opacity="${t.major?.55:.28}" stroke-width="1"/>`;
+    if(t.label)g+=`<text x="${L-5}" y="${+yy+4}" text-anchor="end">${axLab(t.v)}</text>`}
+  for(const m of [30,20,10,0]){const xx=x(d.now-m*60);g+=`<line x1="${xx}" x2="${xx}" y1="${T}" y2="${T+ph}" stroke="#9aa5a3" stroke-opacity=".28"/><text x="${xx}" y="${Hh-4}" text-anchor="${m?"middle":"end"}">${m?"−"+m+" min":"now"}</text>`}
+  g+=`<rect x="${L}" y="${T}" width="${W-L-R}" height="${ph}" fill="none" stroke="var(--line)"/>`;
+  const line=(k,dash)=>{let p="",pen=false;for(const s of sm){if(s[k]<=0){pen=false;continue}p+=(pen?"L":"M")+x(s[0]).toFixed(1)+" "+y(s[k]).toFixed(1);pen=true}return p?`<path d="${p}" fill="none" stroke="var(--ink)" stroke-width="1.6"${dash?' stroke-dasharray="5 3"':""}/>`:""};
   g+=line(2,false)+line(3,true);
-  const ticks=lg?[0.01,0.1,1,10].filter(v=>v<=top):[0,top/2,top];
-  for(const v of ticks)g+=`<text x="${L-4}" y="${y(v)+4}" text-anchor="end">${mfmt(v)}</text>`;
-  for(const m of [30,20,10,0])g+=`<text x="${x(d.now-m*60)}" y="${Hh-4}" text-anchor="${m?"middle":"end"}">${m?"−"+m+" min":"now"}</text>`;
   svg.setAttribute("viewBox",`0 0 ${W} ${Hh}`);svg.innerHTML=g;
-  const seen=[...new Set(sm.map(p=>p[1]))];$("traceNote").innerHTML="Last 30 minutes, one point every 10 s: solid line = receiver estimate, dashed = actual error (needs a reference point). Background: "+seen.map(m=>`<span style="color:${METHCOL[m]}">■</span> ${METHNAME[m]}`).join(" · ");
+  const hasErr=sm.some(p=>p[3]>0), seen=[...new Set(sm.map(p=>p[1]))];
+  const sw=d=>`<svg width="26" height="8" style="vertical-align:middle"><line x1="1" x2="25" y1="4" y2="4" stroke="currentColor" stroke-width="1.6"${d?' stroke-dasharray="5 3"':""}/></svg>`;
+  $("traceNote").innerHTML=`Last 30 minutes, one point every 10 s, ${lg?"logarithmic":"linear"} scale. ${sw(0)} estimated accuracy (the receiver's own figure) · ${sw(1)} actual error against the reference point`+
+    (hasErr?"":" (appears once a reference point is set)")+`.<br>Background: `+seen.map(m=>`<span style="color:${METHCOL[m]}">■</span> ${METHNAME[m]}`).join(" · ");
 }
 let refMsg="";
 const ymdS=(y,ms)=>y?`${String(y).slice(0,4)}-${String(y).slice(4,6)}-${String(y).slice(6,8)} ${new Date(ms).toISOString().slice(11,19)} UTC`:"–";
