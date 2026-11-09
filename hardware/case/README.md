@@ -21,7 +21,7 @@ Two printed parts, `picortk_case_base.stl` and `picortk_case_lid.stl`, plus two 
 
 | Opening | Where | How it's made |
 |---|---|---|
-| Pico micro-USB | left wall | U-slot 12 mm wide, continued through the lid edge (the plug is taller than the space above the Pico) |
+| Pico micro-USB | left wall | U-slot 10 mm wide, 4 mm deep from the top of the base wall, continued through the lid edge (the plug is taller than the space above the Pico) |
 | LG290P USB-C | front wall | 10.5 × 6 mm opening, centred on the socket, **closed by a break-out panel** (see below); fits slim USB-C plugs (set `usbc_w = 12.5`, `usbc_h = 7` for bulky ones) |
 | SMA | back wall | U-slot; a tab on the lid closes it over the connector; about 6 mm of thread sticks out |
 | BOOTSEL | lid | 3.2 mm hole: press with a toothpick |

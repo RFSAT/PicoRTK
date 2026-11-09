@@ -36,8 +36,8 @@ side_gap   = 0.5;    // other board edges to the walls
 sma_flange = 1.9;    // the SMA's square flange sticks out this far beyond the GNSS board edge
 
 /* [Openings] */
-usb_micro_w = 12.0;  // micro-USB plug overmould, width
-usb_micro_z = 8.5;   // bottom of the U-slot (Pico top 11 + 1.3 - half the plug height)
+usb_micro_w = 10.0;  // micro-USB plug overmould, width (12 in revisions 1-4)
+usb_micro_z = 11.5;  // bottom of the U-slot (8.5 in revisions 1-4; 3 mm shallower after test fit)
 usbc_w = 10.5;  usbc_h = 6.0;   // USB-C opening: the plug body must pass, because the socket is 5 mm behind the outer wall face (4 mm cable gap + wall); fits slim plugs, use 12.5 x 7 for bulky ones
 sma_d  = 6.9;        // 1/4-36 UNS thread is 6.35 mm
 // LG290P USB-C: "knockout" = the opening is closed by a break-out panel (pry it out with a small flat screwdriver
