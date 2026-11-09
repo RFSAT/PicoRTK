@@ -58,6 +58,8 @@ btn_hole = 3.2;      // BOOTSEL (lid) and RST (floor) access holes
 /* [Screws] */
 m2_clear = 2.4;  m2_head = 4.4;  m2_pilot = 1.7;
 col_d_gnss = 4.5;   // printed columns under the GNSS board's four corner holes
+col_d_gnss_tight = 4.0;  // the column at x = 30.5 on the USB-C side (gnss_holes[1]) is thinner: on the printed revision 3
+                         // it touched components of the board (4.5 mm in revisions 1-8)
 col_d_pico = 4.2;   // printed columns under the Pico's two antenna-end holes
 col_pilot  = 1.7;   // M2 thread-forming screws; use 3.2 for M2 heat-set inserts
 boss_r = 2.5;
@@ -111,9 +113,9 @@ module base() {
         linear_extrude(z_in1 + 1) rrect(x_in0, x_in1, y_in0, y_in1, 0.8);
       }
       // board columns, printed with the floor: 7 mm for the GNSS board, 10 mm for the Pico
-      for (h = gnss_holes) translate([h[0], h[1], -0.01]) {
-        cylinder(d = col_d_gnss, h = gnss_stand + 0.01);
-        cylinder(d1 = col_d_gnss + 2, d2 = col_d_gnss, h = 1);          // fillet at the foot
+      for (k = [0 : 3]) let(h = gnss_holes[k], d = k == 1 ? col_d_gnss_tight : col_d_gnss) translate([h[0], h[1], -0.01]) {
+        cylinder(d = d, h = gnss_stand + 0.01);
+        cylinder(d1 = d + 2, d2 = d, h = 1);          // fillet at the foot
       }
       for (h = pico_holes) translate([h[0], h[1], -0.01]) {
         cylinder(d = col_d_pico, h = pico_stand + 0.01);

@@ -47,7 +47,7 @@ The receiver's own USB-C is only needed for firmware updates and diagnostics wit
 
 The base has six printed columns, each with a 1.7 mm pilot hole for an M2 thread-forming screw:
 
-- four 7 mm columns (4.5 mm across) under the GNSS board's corner holes;
+- four 7 mm columns under the GNSS board's corner holes: 4.5 mm across, except the one on the USB-C side at the end away from the micro-USB, which is 4.0 mm (`col_d_gnss_tight`) because on the printed revision 3 it touched components on the board;
 - two 11.5 mm columns (4.2 mm across) under the Pico's antenna-end holes (10 mm up to revision 7, which tilted the Pico).
 
 To use M2 heat-set inserts instead, set `col_pilot = 3.2`.
