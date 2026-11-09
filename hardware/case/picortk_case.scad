@@ -27,10 +27,11 @@ gnss_stand = 7;      // column height under the GNSS board (its component side f
 pico_l     = 51;
 pico_w     = 21;
 pico_t     = 1.0;
-pico_stand = 10;     // column height under the Pico (two columns, antenna end)
-above_pico = 4.5;    // clearance between the Pico PCB top and the lid (4 mm + 0.5 mm margin)
-pico_usb_lift = 1.5;  // preview only: the Pico is screwed at its antenna end only, and on the printed case its USB end
-                     // rests this much higher on the foam: its PCB is 3 mm below the lid there (measured on revision 3)
+pico_stand = 11.5;   // column height under the Pico (two columns, antenna end); 10 in revisions 1-7. Measured on the
+                     // printed case: the Pico lies flat 3 mm under the lid, its USB end resting on the foam (3.5 mm gap)
+above_pico = 3.0;    // clearance between the Pico PCB top and the lid (measured); 4.5 in revisions 1-7, so with
+                     // pico_stand = 11.5 the case keeps the same height
+pico_usb_lift = 0;   // preview only: tilt of the Pico's USB end above its antenna end; 0 = flat (it is, from revision 8)
 musb_h = 2.95;       // preview only: micro-USB socket height above the Pico PCB; on the print it just touches the lid
 
 /* [Clearances to the walls] */

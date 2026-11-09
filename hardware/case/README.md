@@ -9,9 +9,9 @@ Two printed parts, `picortk_case_base.stl` and `picortk_case_lid.stl`, plus two 
 | Item | Height |
 |---|---|
 | LG290P board, component side down | 7 mm printed columns; its battery reaches the floor |
-| Gap between the boards | 2 mm |
-| Pico 2 W | 10 mm printed columns, at its two antenna-end holes |
-| Pico PCB (1 mm) to the underside of the lid | 4.5 mm (4 mm + 0.5 mm margin) |
+| Gap between the boards | 3.5 mm (the foam; the Pico's USB end rests on it) |
+| Pico 2 W | 11.5 mm printed columns, at its two antenna-end holes, so the board lies flat |
+| Pico PCB (1 mm) to the underside of the lid | 3 mm, as measured on the printed case; the micro-USB socket just touches the lid |
 
 - Both boards are flush at the Pico's USB end and centred across.
 - The GNSS board is 3.5 mm from the front wall (UART cable plug, USB-C) and 3.5 mm from the back wall, so the boards and the micro-USB slot are centred on the case.
@@ -48,7 +48,7 @@ The receiver's own USB-C is only needed for firmware updates and diagnostics wit
 The base has six printed columns, each with a 1.7 mm pilot hole for an M2 thread-forming screw:
 
 - four 7 mm columns (4.5 mm across) under the GNSS board's corner holes;
-- two 10 mm columns (4.2 mm across) under the Pico's antenna-end holes.
+- two 11.5 mm columns (4.2 mm across) under the Pico's antenna-end holes (10 mm up to revision 7, which tilted the Pico).
 
 To use M2 heat-set inserts instead, set `col_pilot = 3.2`.
 
@@ -77,10 +77,10 @@ The LG290P USB-C cover, if used, needs no hardware.
 
 All of these are parameters at the top of the `.scad` file.
 
-- **`gnss_t = 1.0`:** the column heights (7 and 10 mm) and the 2 mm gap imply a 1.0 mm GNSS board. If it is 1.6 mm, set `pico_stand = 10.6`, or the gap becomes 1.4 mm. OpenSCAD prints the resulting gap.
+- **Board heights:** the column heights (7 and 11.5 mm) give a 3.5 mm gap between the boards with a 1.0 mm GNSS board (`gnss_t`), and put the Pico 3 mm under the lid, as measured on the printed revision 3. If `pico_stand` changes, change `above_pico` by the opposite amount to keep the case height. OpenSCAD prints the resulting gap.
 - **Button positions:**
   - Pico BOOTSEL: x = 12.0, y = 7.2 from the USB end and pin-1 edge.
   - LG290P RST: x = 4.6, y = 3.6 from the USB end and UART edge. It must not be covered by the battery.
   - Both were measured from Waveshare and Raspberry Pi drawings.
 - **SMA flange:** at the SMA the wall steps in to 1.9 mm beyond the GNSS board edge (`sma_flange`), for the connector's square flange.
-- **Wires over the Pico:** 4.5 mm of space suits wires soldered to the pads. Dupont sockets on upward pins need `above_pico` of about 13.
+- **Wires over the Pico:** 3 mm of space suits wires soldered to the pads. Dupont sockets on upward pins need `above_pico` of about 13.
