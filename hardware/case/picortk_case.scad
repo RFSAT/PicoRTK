@@ -29,8 +29,9 @@ pico_w     = 21;
 pico_t     = 1.0;
 pico_stand = 10;     // column height under the Pico (two columns, antenna end)
 above_pico = 4.5;    // clearance between the Pico PCB top and the lid (4 mm + 0.5 mm margin)
-pico_usb_lift = 1.85; // preview only: the Pico is screwed at its antenna end only, and on the printed case its USB end
-                     // rests this much higher on the foam, so the micro-USB socket just touches the lid (measured on revision 3)
+pico_usb_lift = 1.5;  // preview only: the Pico is screwed at its antenna end only, and on the printed case its USB end
+                     // rests this much higher on the foam: its PCB is 3 mm below the lid there (measured on revision 3)
+musb_h = 2.95;       // preview only: micro-USB socket height above the Pico PCB; on the print it just touches the lid
 
 /* [Clearances to the walls] */
 cable_gap  = 3.5;    // GNSS board edge to the inside of the front wall (UART and USB-C side); the back wall uses the same gap, so the boards stay centred
@@ -245,7 +246,7 @@ module ghost() {
   // the Pico, tilted about its antenna-end columns (x = 49) so its USB end sits pico_usb_lift higher
   translate([49, 0, pico_z0]) rotate([0, atan(pico_usb_lift / 49), 0]) translate([-49, 0, -pico_z0]) {
     color("ForestGreen", 0.9) translate([0, 0, pico_z0]) cube([pico_l, pico_w, pico_t]);
-    color("Silver") translate([-1.3, 6.6, pico_top]) cube([5.7, 7.8, 2.6]);                   // micro-USB
+    color("Silver") translate([-1.3, 6.6, pico_top]) cube([5.7, 7.8, musb_h]);                // micro-USB
   }
   color("LightGrey", 0.7) translate([1, -4, gnss_top]) cube([31, 29, gap]);                   // foam
 }
