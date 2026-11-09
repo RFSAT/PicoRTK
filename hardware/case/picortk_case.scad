@@ -49,7 +49,7 @@ sma_tab_drop = 0.5;  // the lid's tongue reaches this much lower onto the SMA th
 // in the notch at its top edge; it pivots on its bottom edge and breaks outwards); "open" = plain opening
 usbc_mode = "knockout";
 ko_slot  = 0.5;      // slot between the panel and the wall (through the wall, except where the panel is held)
-ko_web   = 0.6;      // thickness of the holding material at the outer face: thinner = easier to break (try 0.4-0.8 on ko_test)
+ko_web   = 0.4;      // thickness of the holding web and side tabs at the outer face: thinner = easier to break (0.6 in revisions 4-9; try 0.4-0.8 on ko_test)
 ko_tab_h = 1.2;      // height of the small tab holding each side of the panel
 ko_notch = [4.0, 1.0, 1.0];   // pry notch at the top edge of the panel: width, height, depth from the outer face
 cover_fit = 0.15;    // press-in cover: clearance per side in the opening (smaller = tighter)

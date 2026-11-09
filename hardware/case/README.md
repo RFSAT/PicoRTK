@@ -32,15 +32,15 @@ Two printed parts, `picortk_case_base.stl` and `picortk_case_lid.stl`, plus two 
 
 The receiver's own USB-C is only needed for firmware updates and diagnostics with QGNSS, so the case comes with that opening closed.
 
-- **How the panel is held:** it sits in the opening with a 0.5 mm slot all round. On the outside face it is held by a thin web along its bottom edge and by a small tab at the middle of each side. The top edge is free.
+- **How the panel is held:** it sits in the opening with a 0.5 mm slot all round. On the outside face it is held by a thin 0.4 mm web along its bottom edge and by a small tab at the middle of each side. The top edge is free.
 - **To open it:** put a small flat screwdriver in the notch at the top edge from outside and lever outwards. The panel pivots on its bottom edge, the tabs snap, and it comes away outwards, not into the case. Trim the remains of the web and tabs with a knife or file.
 - **To close it again:** press in `picortk_usbc_cover.stl`. It is a plug with a thin outer flange, two crush ribs and a pull tab, printed flange down.
 - **Plain opening instead:** set `usbc_mode = "open"`.
 
 **Print `picortk_ko_test.stl` first.** It is a 2 mm wall with the same panel, printed upright like the case wall, and takes a few minutes.
 
-- If it is too hard to break, reduce `ko_web` (0.6 mm; try 0.4) or `ko_tab_h` (1.2 mm).
-- If it falls out by itself, increase `ko_web` to 0.8 mm.
+- If it is too hard to break, reduce `ko_tab_h` (1.2 mm).
+- If it falls out by itself or the web is missing, increase `ko_web` from 0.4 to 0.6 mm. A 0.4 mm web is one extrusion line with a 0.4 mm nozzle: the slicer must keep thin walls (PrusaSlicer/Orca/Cura with Arachne do by default).
 - If the cover is too tight or too loose, adjust `cover_fit` (0.15 mm per side).
 
 ## Board columns
