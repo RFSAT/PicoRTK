@@ -1,6 +1,6 @@
 # PicoRTK case (Pico 2 W + Waveshare LG290P)
 
-Two printed parts: `picortk_case_base.stl` and `picortk_case_lid.stl`. Both are generated from the parametric `picortk_case.scad` (OpenSCAD 2021 or later).
+Two printed parts, `picortk_case_base.stl` and `picortk_case_lid.stl`, plus two optional ones: `picortk_usbc_cover.stl` and the test piece `picortk_ko_test.stl`. All are generated from the parametric `picortk_case.scad` (OpenSCAD 2021 or later).
 
 **Outside size:** 56 × 44 × 19.5 mm (base 17.5 mm high, lid 2 mm).
 
@@ -22,11 +22,26 @@ Two printed parts: `picortk_case_base.stl` and `picortk_case_lid.stl`. Both are 
 | Opening | Where | How it's made |
 |---|---|---|
 | Pico micro-USB | left wall | U-slot 12 mm wide, continued through the lid edge (the plug is taller than the space above the Pico) |
-| LG290P USB-C | front wall | 10.5 × 6 mm opening, centred on the socket; fits slim USB-C plugs (set `usbc_w = 12.5`, `usbc_h = 7` for bulky ones) |
+| LG290P USB-C | front wall | 10.5 × 6 mm opening, centred on the socket, **closed by a break-out panel** (see below); fits slim USB-C plugs (set `usbc_w = 12.5`, `usbc_h = 7` for bulky ones) |
 | SMA | back wall | U-slot; a tab on the lid closes it over the connector; about 6 mm of thread sticks out |
 | BOOTSEL | lid | 3.2 mm hole: press with a toothpick |
 | RST | floor | 3.2 mm hole: press with a straightened paperclip (the button faces down) |
 | Pico LED | lid | 2 mm light window |
+
+## LG290P USB-C break-out panel
+
+The receiver's own USB-C is only needed for firmware updates and diagnostics with QGNSS, so the case comes with that opening closed.
+
+- **How the panel is held:** it sits in the opening with a 0.5 mm slot all round. On the outside face it is held by a thin web along its bottom edge and by a small tab at the middle of each side. The top edge is free.
+- **To open it:** put a small flat screwdriver in the notch at the top edge from outside and lever outwards. The panel pivots on its bottom edge, the tabs snap, and it comes away outwards, not into the case. Trim the remains of the web and tabs with a knife or file.
+- **To close it again:** press in `picortk_usbc_cover.stl`. It is a plug with a thin outer flange, two crush ribs and a pull tab, printed flange down.
+- **Plain opening instead:** set `usbc_mode = "open"`.
+
+**Print `picortk_ko_test.stl` first.** It is a 2 mm wall with the same panel, printed upright like the case wall, and takes a few minutes.
+
+- If it is too hard to break, reduce `ko_web` (0.6 mm; try 0.4) or `ko_tab_h` (1.2 mm).
+- If it falls out by itself, increase `ko_web` to 0.8 mm.
+- If the cover is too tight or too loose, adjust `cover_fit` (0.15 mm per side).
 
 ## Board columns
 
@@ -43,6 +58,8 @@ To use M2 heat-set inserts instead, set `col_pilot = 3.2`.
 |---|---|
 | M2 × 5 thread-forming screw for plastic (boards onto the columns) | 6 |
 | M2 × 5 countersunk thread-forming screw (lid) | 4 |
+
+The LG290P USB-C cover, if used, needs no hardware.
 
 ## Printing
 

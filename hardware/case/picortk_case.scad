@@ -8,7 +8,7 @@
 //   z up, 0 = top surface of the case floor
 //
 // Render one part:  openscad -D 'part="base"' -o base.stl picortk_case.scad
-//   part = "base" | "lid" | "assembly" | "exploded" (previews with ghost boards)
+//   part = "base" | "lid" | "usbc_cover" | "ko_test" | "assembly" | "exploded" (previews with ghost boards)
 
 part = "assembly";
 
@@ -40,6 +40,14 @@ usb_micro_w = 12.0;  // micro-USB plug overmould, width
 usb_micro_z = 8.5;   // bottom of the U-slot (Pico top 11 + 1.3 - half the plug height)
 usbc_w = 10.5;  usbc_h = 6.0;   // USB-C opening: the plug body must pass, because the socket is 5 mm behind the outer wall face (4 mm cable gap + wall); fits slim plugs, use 12.5 x 7 for bulky ones
 sma_d  = 6.9;        // 1/4-36 UNS thread is 6.35 mm
+// LG290P USB-C: "knockout" = the opening is closed by a break-out panel (pry it out with a small flat screwdriver
+// in the notch at its top edge; it pivots on its bottom edge and breaks outwards); "open" = plain opening
+usbc_mode = "knockout";
+ko_slot  = 0.5;      // slot between the panel and the wall (through the wall, except where the panel is held)
+ko_web   = 0.6;      // thickness of the holding material at the outer face: thinner = easier to break (try 0.4-0.8 on ko_test)
+ko_tab_h = 1.2;      // height of the small tab holding each side of the panel
+ko_notch = [4.0, 1.0, 1.0];   // pry notch at the top edge of the panel: width, height, depth from the outer face
+cover_fit = 0.15;    // press-in cover: clearance per side in the opening (smaller = tighter)
 btn_hole = 3.2;      // BOOTSEL (lid) and RST (floor) access holes
 
 /* [Screws] */
@@ -89,6 +97,7 @@ module rrect(x0, x1, y0, y1, r) { // rounded rectangle in the xy plane
 
 // ---------------- base ----------------
 module base() {
+  if (usbc_mode == "knockout") usbc_panel();
   difference() {
     union() {
       // shell
@@ -131,6 +140,56 @@ module base() {
     // RST access hole through the floor (the button faces down)
     translate([rst[0], rst[1], -floor_t - 1]) cylinder(d = btn_hole, h = floor_t + 2);
   }
+}
+
+// ---------------- USB-C break-out panel and its optional cover ----------------
+// Local frame on the front wall: u along the wall (x), v up (z), d into the wall from its outer face (y)
+module on_front(d0 = 0) {
+  multmatrix([[1, 0, 0, usbc_c[0]], [0, 0, 1, y_in0 - wall + d0], [0, 1, 0, usbc_c[1]], [0, 0, 0, 1]]) children();
+}
+module usbc_panel() {
+  w = usbc_w; h = usbc_h; s = ko_slot; r = 1.5;
+  on_front() {
+    difference() {
+      linear_extrude(wall) rrect(-w/2 + s, w/2 - s, -h/2 + s, h/2 - s, r - s/2);
+      // pry notch at the top edge, outer face
+      translate([-ko_notch[0]/2, h/2 - s - ko_notch[1], -1]) cube([ko_notch[0], ko_notch[1] + 1, ko_notch[2] + 1]);
+    }
+    // bottom edge: held along its straight part by a thin web at the outer face (the hinge it breaks along)
+    translate([-w/2 + r, -h/2 - 0.05, 0]) cube([w - 2*r, s + 0.1, ko_web]);
+    // a small tab on each side, at mid-height, also at the outer face
+    for (sg = [-1, 1]) translate([sg > 0 ? w/2 - s - 0.05 : -w/2 - 0.05, -ko_tab_h/2, 0]) cube([s + 0.1, ko_tab_h, ko_web]);
+    // the top edge is a free slot, so the panel pivots outwards on its bottom edge
+  }
+}
+// Optional press-in cover for an opened USB-C hole: a plug with a thin flange outside and a pull tab.
+// Printed flange down (as exported).
+module usbc_cover() {
+  w = usbc_w; h = usbc_h; c = cover_fit; fl = 1.2; ft = 1.0; plug = wall - 0.4;
+  difference() {
+    union() {
+      linear_extrude(ft) rrect(-w/2 - fl, w/2 + fl, -h/2 - fl, h/2 + fl, 1.5 + fl);   // flange
+      translate([0, 0, ft - 0.01]) linear_extrude(plug + 0.01) rrect(-w/2 + c, w/2 - c, -h/2 + c, h/2 - c, 1.5 - c);
+      // two crush ribs on the long sides grip the opening
+      for (sg = [-1, 1]) translate([-2, sg > 0 ? h/2 - c - 0.01 : -h/2 + c - 0.3 + 0.01, ft + 0.3]) cube([4, 0.3, plug - 0.6]);
+      // pull tab above the flange
+      translate([-2.5, h/2 + fl - 0.5, 0]) cube([5, 3.5, ft]);
+    }
+    translate([0, h/2 + fl + 1.8, -1]) cylinder(d = 1.6, h = 3);   // hole in the tab for a fingernail or string
+    translate([0, 0, ft + 0.6]) linear_extrude(plug) rrect(-w/2 + c + 1.0, w/2 - c - 1.0, -h/2 + c + 1.0, h/2 - c - 1.0, 0.6);   // hollow: springs a little
+  }
+}
+// Test piece: a 2 mm wall with the same panel, standing on a foot, printed upright like the case wall
+module ko_test() {
+  plate = [usbc_w + 10, usbc_h + 8];
+  difference() {
+    union() {
+      translate([usbc_c[0] - plate[0]/2, y_in0 - wall, 0]) cube([plate[0], wall, plate[1]]);
+      translate([usbc_c[0] - plate[0]/2, y_in0 - wall - 4, -2]) cube([plate[0], wall + 8, 2]);
+    }
+    on_front(-1) linear_extrude(wall + 2) rrect(-usbc_w/2, usbc_w/2, -usbc_h/2, usbc_h/2, 1.5);
+  }
+  usbc_panel();
 }
 
 // ---------------- lid ----------------
@@ -182,6 +241,8 @@ module ghost() {
 }
 
 if (part == "base") base();
+else if (part == "usbc_cover") usbc_cover();
+else if (part == "ko_test") translate([0, 0, 2]) ko_test();
 else if (part == "lid") translate([0, 0, z_in1 + lid_t]) rotate([180, 0, 0]) lid();   // printed top face down: turned over (a rotation, not a mirror)
 else if (part == "lid_check") translate([0, 0, z_in1 + lid_t]) rotate([180, 0, 0]) import("picortk_case_lid.stl");   // the printed lid turned back over
 else if (part == "assembly") { color("Gainsboro") base(); ghost(); color("LightSteelBlue", 0.45) lid(); }
