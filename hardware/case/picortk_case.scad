@@ -40,6 +40,7 @@ usb_micro_w = 10.0;  // micro-USB plug overmould, width (12 in revisions 1-4)
 usb_micro_z = 11.5;  // bottom of the U-slot (8.5 in revisions 1-4; 3 mm shallower after test fit)
 usbc_w = 10.5;  usbc_h = 6.0;   // USB-C opening: the plug body must pass, because the socket is 5 mm behind the outer wall face (4 mm cable gap + wall); fits slim plugs, use 12.5 x 7 for bulky ones
 sma_d  = 6.9;        // 1/4-36 UNS thread is 6.35 mm
+sma_tab_drop = 1.0;  // the lid's tongue reaches this much lower onto the SMA than the base slot's centre (0 in revisions 1-5)
 // LG290P USB-C: "knockout" = the opening is closed by a break-out panel (pry it out with a small flat screwdriver
 // in the notch at its top edge; it pivots on its bottom edge and breaks outwards); "open" = plain opening
 usbc_mode = "knockout";
@@ -197,7 +198,11 @@ lip_t = 1.2; lip_h = 2.0;
 module lid() {
   difference() {
     union() {
-      translate([0, 0, z_in1]) linear_extrude(lid_t) rrect(x_in0 - wall, x_in1 + wall, y_in0 - wall, y_in1 + wall, 2.5);
+      // lid plate: same outline as the base, including the step at the SMA
+      translate([0, 0, z_in1]) linear_extrude(lid_t) difference() {
+        rrect(x_in0 - wall, x_in1 + wall, y_in0 - wall, y_in1 + wall, 2.5);
+        translate([sma_c[0] - sma_bay/2, y_in1]) square([sma_bay, wall + 1]);
+      }
       // locating lip inside the walls, cut back around bosses and the two U-slots
       difference() {
         translate([0, 0, z_in1 - lip_h]) linear_extrude(lip_h)
@@ -211,8 +216,8 @@ module lid() {
       }
       // tab that fills the SMA U-slot down to the connector
       difference() {
-        translate([sma_c[0] - sma_d/2 + fit/2, sma_y0 + fit/2, sma_c[1]]) cube([sma_d - fit, y_in1 - sma_y0 - fit, z_in1 - sma_c[1] + 0.01]);
-        translate([sma_c[0], sma_y0 - 1, sma_c[1]]) rotate([-90, 0, 0]) cylinder(d = sma_d + 0.3, h = y_in1 - sma_y0 + 2);
+        translate([sma_c[0] - sma_d/2 + fit/2, sma_y0 + fit/2, sma_c[1] - sma_tab_drop]) cube([sma_d - fit, y_in1 - sma_y0 - fit, z_in1 - sma_c[1] + sma_tab_drop + 0.01]);
+        translate([sma_c[0], sma_y0 - 1, sma_c[1] - sma_tab_drop]) rotate([-90, 0, 0]) cylinder(d = sma_d + 0.3, h = y_in1 - sma_y0 + 2);
       }
     }
     // screws, countersunk
