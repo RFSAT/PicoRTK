@@ -79,7 +79,7 @@ You can also do this through the Pico: with **USB bridge** on (the default), the
 
 ## Flashing
 
-1. Download `PicoRTK-<version>.uf2` from the GitHub Actions run or release.
+1. Download `PicoRTK-<version>_V1.uf2` from the GitHub Actions run or release. The `_V1` ending is the RFSAT variant ID (LG290P module + Pico 2 W); private builds are named `PicoRTK-<version>-private_V1.uf2`.
 2. Hold **BOOTSEL** while plugging the Pico into USB.
 3. Copy the UF2 onto the `RP2350` drive that appears. The Pico restarts by itself.
 

@@ -73,7 +73,9 @@ jobs:
         run: |
           VERSION=${{ inputs.release_tag || '' }}; [ -n "$VERSION" ] || VERSION=$(git describe --tags --always)
           PICORTK_VERSION=$VERSION bash tools/build.sh
-          mv build/PicoRTK.ino.uf2 build/PicoRTK-$VERSION.uf2
+          # File names end with the RFSAT variant ID (_V1 = LG290P module + Pico 2 W), so each file
+          # shows which prototype it is for (master documentation C-12)
+          mv build/PicoRTK.ino.uf2 build/PicoRTK-${VERSION}_V1.uf2
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       - uses: actions/upload-artifact@v4
