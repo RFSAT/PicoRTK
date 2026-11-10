@@ -13,7 +13,7 @@ static BLEServiceUART bleUart(256, 2048);
 static WiFiServer *tcpServer = nullptr;
 static WiFiClient tcpClients[MAX_TCP];
 static RtcmFramer inFramer;
-static uint32_t sentBytes = 0, inboundFrames = 0;
+static uint32_t sentBytes = 0, inboundFrames = 0, lastInboundFrameMs = 0;
 static String btName;
 
 // Tail of what was sent, for the web NMEA monitor
@@ -104,15 +104,18 @@ void outputsNetworkUp(bool up)
 
 static void inbound(const uint8_t *buf, size_t n, bool accept)
 {
-    if (!accept)
-        return;
     for (size_t i = 0; i < n; i++)
         if (inFramer.feed(buf[i]))
-            if (rtcmToRx.write(inFramer.frame(), inFramer.frameLength()))
+        {
+            lastInboundFrameMs = millis();
+            if (accept && rtcmToRx.write(inFramer.frame(), inFramer.frameLength()))
                 inboundFrames++;
+        }
 }
 
-void outputsLoop(bool ntripStreaming)
+bool outputsInboundRtcmActive() { return lastInboundFrameMs && millis() - lastInboundFrameMs < 10000; }
+
+void outputsLoop(bool ntripStreaming, bool rtkAllowed)
 {
     // New TCP clients
     if (tcpServer)
@@ -152,7 +155,7 @@ void outputsLoop(bool ntripStreaming)
     }
 
     // Inbound bytes: RTCM from apps that run their own NTRIP client
-    bool accept = cfg.inboundRtcm && !ntripStreaming && cfg.mode != "has"; // HAS mode: no RTCM from apps either
+    bool accept = cfg.inboundRtcm && !ntripStreaming && rtkAllowed && cfg.mode != "has"; // HAS mode: no RTCM from apps either
     if (useSpp)
     {
         int a = SerialBT.available();

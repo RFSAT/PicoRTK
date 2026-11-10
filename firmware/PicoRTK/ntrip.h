@@ -14,6 +14,7 @@ enum class NtripState : uint8_t
     Reply,      // waiting for the caster's answer
     Streaming,  // receiving RTCM
     Stopped,    // every source rejected us; fix the settings
+    Paused,     // the method ladder holds RTK back for a while (only with auto-pause on)
 };
 
 struct NtripStatus
@@ -37,7 +38,7 @@ struct NtripStatus
 void ntripSetup();                 // after configLoad()
 void ntripStop();                  // safe shutdown: close the caster connection
 void ntripRestart();               // after a correction-mode change
-void ntripLoop(bool networkUp);    // call often from core 0
+void ntripLoop(bool networkUp, bool allowed = true); // allowed = false: the method ladder pauses RTK    // call often from core 0
 void ntripStatus(NtripStatus &s);
 const char *ntripStateName(NtripState s);
 bool ntripStreaming();

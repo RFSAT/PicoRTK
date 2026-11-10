@@ -115,6 +115,11 @@ String configToJson(bool withSecrets)
     JsonObject cm = d["corrections"].to<JsonObject>();
     cm["mode"] = cfg.mode;
     cm["galileoHas"] = cfg.galileoHas;
+    cm["autoPause"] = cfg.ladderAutoPause;
+    cm["trialSec"] = cfg.ladderTrialSec;
+    cm["rtkGoodM"] = cfg.ladderGoodM;
+    cm["pauseSec"] = cfg.ladderPauseSec;
+    cm["statusSentence"] = cfg.prfsm;
     JsonObject rp = d["reference"].to<JsonObject>();
     rp["set"] = cfg.refSet;
     rp["lat"] = serialized(String(cfg.refLat, 9));
@@ -266,7 +271,18 @@ bool configFromJson(const String &json, String &err)
     {
         getStr(cm["mode"], c.mode);
         getNum(cm["galileoHas"], c.galileoHas);
+        getNum(cm["autoPause"], c.ladderAutoPause);
+        getNum(cm["trialSec"], c.ladderTrialSec);
+        getNum(cm["rtkGoodM"], c.ladderGoodM);
+        getNum(cm["pauseSec"], c.ladderPauseSec);
+        getNum(cm["statusSentence"], c.prfsm);
     }
+    if (c.ladderTrialSec < 60)
+        c.ladderTrialSec = 60;
+    if (c.ladderPauseSec < 60)
+        c.ladderPauseSec = 60;
+    if (!(c.ladderGoodM > 0.01f))
+        c.ladderGoodM = 0.5f;
     JsonVariantConst rp = d["reference"];
     if (!rp.isNull())
     {

@@ -3,6 +3,7 @@
 #include "receiver.h"
 #include "shared.h"
 #include "diag.h"
+#include "ladder.h"
 #include <Arduino.h>
 
 SpscRing<16384> rtcmToRx;
@@ -18,6 +19,9 @@ static MethodTracker tracker; // under ggaMutex
 static SkyTable sky;           // under skyMutex
 static mutex_t skyMutex;
 static RefPoint refPoint;     // under ggaMutex
+static Ladder ladder;         // under ggaMutex
+std::atomic<bool> ladderSourceAvailable{false}; // core 0: Wi-Fi + caster, or an app sending RTCM
+std::atomic<bool> ladderAllowRtk{true};         // core 1 -> core 0: the ladder's advice
 mutex_t ggaMutex;
 Stats stats;
 std::atomic<bool> configReady{false};
@@ -190,6 +194,38 @@ bool getLatestGga(SharedGga &out)
     return out.len > 0;
 }
 
+void getLadder(Ladder &out)
+{
+    mutex_enter_blocking(&ggaMutex);
+    out = ladder;
+    mutex_exit(&ggaMutex);
+}
+
+bool ladderTakeChange(char *reason, size_t n, LadderState &st)
+{
+    mutex_enter_blocking(&ggaMutex);
+    bool c = ladder.takeChange();
+    if (c)
+    {
+        strlcpy(reason, ladder.reason(), n);
+        st = ladder.state();
+    }
+    mutex_exit(&ggaMutex);
+    return c;
+}
+
+void ladderConfigure()
+{
+    LadderConfig c;
+    c.rtkAllowed = cfg.mode != "has";
+    c.trialSec = cfg.ladderTrialSec;
+    c.rtkGoodM = cfg.ladderGoodM;
+    c.pauseSec = cfg.ladderPauseSec;
+    mutex_enter_blocking(&ggaMutex);
+    ladder.configure(c);
+    mutex_exit(&ggaMutex);
+}
+
 void receiverInitShared()
 {
     mutex_init(&skyMutex);
@@ -210,6 +246,9 @@ void receiverSetup1()
     pinMode(PIN_RX_RTK, INPUT_PULLDOWN);
     parseFilter();
 }
+
+static char prfsm[96];
+static size_t prfsmLen = 0;
 
 static void handleSentence(const char *s, size_t len)
 {
@@ -284,9 +323,19 @@ static void handleSentence(const char *s, size_t len)
             sharedGga.info = g;
             sharedGga.atMs = now;
             bool sample = tracker.update(now, g, m, eh, ev, refPoint, ci, speed);
+            LadderInput li;
+            li.nowMs = now;
+            li.sourceAvailable = ladderSourceAvailable.load();
+            li.correctionsLive = rtcmLive;
+            li.method = m;
+            li.estH = eh;
+            ladderAllowRtk.store(ladder.update(li));
+            const LadderState lst = ladder.state();
             const bool moving = tracker.moving();
             const MethodStat &ms = tracker.stat(methodGroup(m) >= 0 ? methodGroup(m) : 0);
             mutex_exit(&ggaMutex);
+            if (cfg.prfsm)
+                prfsmLen = prfsmSentence(prfsm, sizeof(prfsm), lst, m, ci, eh, ev);
             diagC1 = 37;
             if (sample)
             {
@@ -317,6 +366,11 @@ static void handleSentence(const char *s, size_t len)
     diagC1 = 40;
     if (send)
         nmeaToNet.write((const uint8_t *)s, len); // as the receiver computed it; dropped if nobody drains the ring
+    if (prfsmLen)
+    {
+        nmeaToNet.write((const uint8_t *)prfsm, prfsmLen); // optional status sentence, right after the GGA
+        prfsmLen = 0;
+    }
 }
 
 void receiverLoop1()

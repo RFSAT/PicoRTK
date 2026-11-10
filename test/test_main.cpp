@@ -9,6 +9,7 @@
 #include "ring.h"
 #include "rtcm.h"
 #include "selector.h"
+#include "ladder.h"
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -527,8 +528,170 @@ static void testEvTrim()
     CHECK(evSession("E\t42\tx", 6) == 42 && evSession("x", 1) == 0);
 }
 
+// Feed the ladder one epoch per second for `sec` seconds
+static void run(Ladder &l, uint32_t &t, int sec, bool src, bool live, Method m, float est)
+{
+    for (int i = 0; i < sec; i++)
+    {
+        LadderInput in;
+        in.nowMs = t;
+        in.sourceAvailable = src;
+        in.correctionsLive = live;
+        in.method = m;
+        in.estH = est;
+        l.update(in);
+        t += 1000;
+    }
+}
+
+static void testLadder()
+{
+    // 1. No source: RTK allowed (as soon as one appears), receiver on its own
+    {
+        Ladder l;
+        uint32_t t = 1000;
+        run(l, t, 5, false, false, M_SBAS, 0.9f);
+        CHECK(l.state() == LS_NO_SOURCE && l.allowRtk());
+        CHECK(l.altBest() > 0.89f && l.altBest() < 0.91f);
+        CHECK(l.takeChange() && !l.takeChange());
+    }
+    // 2. RTK fixed: stays RTK, never paused
+    {
+        Ladder l;
+        uint32_t t = 1000;
+        run(l, t, 30, true, true, M_RTK_FLOAT, 2.0f);
+        CHECK(l.state() == LS_RTK && l.allowRtk());
+        run(l, t, 3600, true, true, M_RTK_FIXED, 0.02f);
+        CHECK(l.state() == LS_RTK && l.allowRtk() && l.pauseCount() == 0);
+        CHECK(strcmp(l.reason(), "RTK fixed") == 0);
+    }
+    // 3. The balcony case: RTK float stuck at 4 m, SBAS seen at 0.8 m before -> paused after the trial
+    {
+        Ladder l;
+        uint32_t t = 1000;
+        run(l, t, 60, false, false, M_SBAS, 0.8f);
+        run(l, t, 299, true, true, M_RTK_FLOAT, 4.0f);
+        CHECK(l.state() == LS_RTK && l.allowRtk()); // still in the 5 min trial
+        run(l, t, 2, true, true, M_RTK_FLOAT, 4.0f);
+        CHECK(l.state() == LS_RTK_PAUSED && !l.allowRtk() && l.pauseCount() == 1);
+        CHECK(strstr(l.reason(), "paused for 15 min") && strstr(l.reason(), "4.0 m") && strstr(l.reason(), "0.8 m"));
+        // during the pause the receiver falls back; the ladder stays paused for 15 min
+        run(l, t, 899, true, false, M_SBAS, 0.7f);
+        CHECK(l.state() == LS_RTK_PAUSED && !l.allowRtk());
+        run(l, t, 2, true, false, M_SBAS, 0.7f);
+        CHECK(l.allowRtk() && l.state() == LS_RTK_TRYING);
+        // fails again -> next pause is 30 min
+        run(l, t, 301, true, true, M_RTK_FLOAT, 4.0f);
+        CHECK(l.state() == LS_RTK_PAUSED && strstr(l.reason(), "paused for 30 min"));
+    }
+    // 4. Poor float but better than the fallback: keeps RTK
+    {
+        Ladder l;
+        uint32_t t = 1000;
+        run(l, t, 60, false, false, M_SBAS, 1.2f);
+        run(l, t, 900, true, true, M_RTK_FLOAT, 0.9f);
+        CHECK(l.state() == LS_RTK && l.allowRtk() && l.pauseCount() == 0);
+    }
+    // 5. No alternative seen yet: compared with a typical SBAS result (1.5 m)
+    {
+        Ladder l;
+        uint32_t t = 1000;
+        run(l, t, 400, true, true, M_RTK_FLOAT, 1.2f);
+        CHECK(l.allowRtk());
+        Ladder l2;
+        t = 1000;
+        run(l2, t, 400, true, true, M_RTK_FLOAT, 3.0f);
+        CHECK(!l2.allowRtk() && strstr(l2.reason(), "SBAS typically gives 1.5 m"));
+    }
+    // 6. Corrections arrive but the receiver never reaches RTK (wrong format, distant base)
+    {
+        Ladder l;
+        uint32_t t = 1000;
+        run(l, t, 301, true, true, M_DGNSS, 1.0f);
+        CHECK(l.state() == LS_RTK_PAUSED && strstr(l.reason(), "no RTK solution"));
+        // a source that delivers nothing (caster down) is not paused, it just waits
+        Ladder w;
+        t = 1000;
+        run(w, t, 1200, true, false, M_SBAS, 1.0f);
+        CHECK(w.allowRtk() && w.state() == LS_RTK_TRYING && strstr(w.reason(), "waiting for corrections"));
+    }
+    // 7. Float converging slowly but reaching 0.5 m within the trial: no pause; good float later lapses briefly
+    {
+        Ladder l;
+        uint32_t t = 1000;
+        run(l, t, 200, true, true, M_RTK_FLOAT, 2.0f);
+        run(l, t, 200, true, true, M_RTK_FLOAT, 0.3f);
+        run(l, t, 200, true, true, M_RTK_FLOAT, 2.0f); // within a trial period of the last good epoch
+        CHECK(l.allowRtk() && l.pauseCount() == 0);
+    }
+    // 8. Source disappears (Wi-Fi out of range): no source, trial restarts when it comes back
+    {
+        Ladder l;
+        uint32_t t = 1000;
+        run(l, t, 200, true, true, M_RTK_FLOAT, 3.0f);
+        run(l, t, 30, false, false, M_SBAS, 1.0f);
+        CHECK(l.state() == LS_NO_SOURCE);
+        run(l, t, 200, true, true, M_RTK_FLOAT, 3.0f);
+        CHECK(l.allowRtk()); // a new 5 min trial
+    }
+    // 9. HAS only mode
+    {
+        Ladder l;
+        LadderConfig c;
+        c.rtkAllowed = false;
+        l.configure(c);
+        uint32_t t = 1000;
+        run(l, t, 3, true, false, M_HAS_CONV, 1.0f);
+        CHECK(l.state() == LS_HAS_ONLY && !l.allowRtk());
+    }
+    // 10. Pause doubling is cleared by a minute of RTK fixed; it never exceeds the maximum
+    {
+        Ladder l;
+        uint32_t t = 1000;
+        for (int k = 0; k < 4; k++)
+        {
+            run(l, t, 301, true, true, M_RTK_FLOAT, 5.0f);
+            run(l, t, 3601, true, false, M_SBAS, 1.0f);
+        }
+        run(l, t, 301, true, true, M_RTK_FLOAT, 5.0f);
+        CHECK(strstr(l.reason(), "paused for 60 min"));
+        run(l, t, 3601, true, false, M_SBAS, 1.0f);
+        run(l, t, 120, true, true, M_RTK_FIXED, 0.02f);
+        run(l, t, 1000, false, false, M_SBAS, 1.0f);
+        run(l, t, 301, true, true, M_RTK_FLOAT, 5.0f);
+        CHECK(strstr(l.reason(), "paused for 15 min"));
+    }
+    // 11. millis() wrap-around during a pause
+    {
+        Ladder l;
+        uint32_t t = 0xFFFFFFFFu - 400000u;
+        run(l, t, 301, true, true, M_RTK_FLOAT, 5.0f);
+        CHECK(!l.allowRtk());
+        run(l, t, 899, true, false, M_SBAS, 1.0f);
+        CHECK(!l.allowRtk());
+        run(l, t, 2, true, false, M_SBAS, 1.0f);
+        CHECK(l.allowRtk());
+    }
+    // 12. $PRFSM sentence
+    {
+        char b[160];
+        CorrInfo c;
+        c.live = true;
+        c.age = 1.0f;
+        c.station = 1234;
+        size_t n = prfsmSentence(b, sizeof(b), LS_RTK, M_RTK_FIXED, c, 0.0141f, 0.0252f);
+        CHECK(n > 0 && strncmp(b, "$PRFSM,RTK,FIX,live,1.0,1234,0.014,0.025*", 41) == 0);
+        CHECK(nmeaChecksumOk(b, n));
+        CorrInfo none;
+        n = prfsmSentence(b, sizeof(b), LS_NO_SOURCE, M_GNSS, none, -1, -1);
+        CHECK(n > 0 && strncmp(b, "$PRFSM,NOSRC,GNSS,none,,,,*", 27) == 0);
+        CHECK(nmeaChecksumOk(b, n));
+    }
+}
+
 int main()
 {
+    testLadder();
     testEvTrim();
     testSky();
     testHistory();

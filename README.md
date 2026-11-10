@@ -244,6 +244,28 @@ Each processor core writes a checkpoint number as it works (one RAM write per st
 - On USB once at start-up (`[boot] previous run: ...`), before the receiver stream starts.
 - Restart and Shut down from the page are recorded as a normal end. A crash address maps to a source line with `arm-none-eabi-addr2line -e PicoRTK.ino.elf <pc>` on the ELF of the same build.
 
+## Method ladder (advice only by default)
+
+The same method ladder as [PostcardRTK](https://github.com/RFSAT/PostcardRTK) (`ladder.cpp`, shared and unit-tested) runs on every GGA. It judges whether RTK is doing better than what Galileo HAS or SBAS achieved here.
+
+**What it checks:** RTK gets 5 minutes with live corrections to reach RTK fixed, or float within 0.5 m. Otherwise it is compared with the best HAS/SBAS estimate of the last hour, or with 1.5 m if neither has been seen yet.
+
+**By default it changes nothing.** It only reports:
+- on the Home page, next to the correction mode;
+- as "advice only" events in the event log, written only when its state changes.
+
+NTRIP, Bluetooth/TCP output and accuracy stay exactly as before.
+
+**Settings file keys** (`corrections` section), all off or at their defaults unless set:
+
+| Key | Default | What it does |
+|---|---|---|
+| `autoPause` | `false` | `true` = act on the advice: close the caster connection for 15 min (doubling, up to 1 h) so the receiver falls back to HAS/SBAS, then retry RTK |
+| `trialSec` | 300 | |
+| `rtkGoodM` | 0.5 | |
+| `pauseSec` | 900 | |
+| `statusSentence` | `false` | `true` = send the `$PRFSM` status sentence (ladder state, method, corrections live/stale, estimate) to Bluetooth/TCP clients after every GGA |
+
 ## Private build with your settings built in
 
 A Pico flashed with a private build starts with your Wi-Fi networks, caster logins and bench position, and does not need the setup access point. Its web page shows "(private build)" next to the version.

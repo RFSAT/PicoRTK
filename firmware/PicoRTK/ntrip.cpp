@@ -80,6 +80,7 @@ const char *ntripStateName(NtripState s)
     case NtripState::Reply: return "waiting for caster";
     case NtripState::Streaming: return "streaming";
     case NtripState::Stopped: return "stopped";
+    case NtripState::Paused: return "paused by the method ladder";
     }
     return "?";
 }
@@ -222,12 +223,24 @@ static void pushStream(const uint8_t *data, size_t n, uint32_t now)
     }
 }
 
-void ntripLoop(bool networkUp)
+void ntripLoop(bool networkUp, bool allowed)
 {
     uint32_t now = millis();
 
     if (state == NtripState::Off || state == NtripState::Stopped)
         return;
+
+    // The method ladder holds RTK back (only with "pause RTK automatically" on in the settings)
+    if (!allowed)
+    {
+        if (state != NtripState::Paused)
+        {
+            closeClient();
+            event("RTK paused by the method ladder, receiver falls back to Galileo HAS / SBAS");
+            setState(NtripState::Paused);
+        }
+        return;
+    }
 
     // Losing the network is not the source's fault: keep the source, wait for the network
     if (!networkUp)
@@ -243,6 +256,9 @@ void ntripLoop(bool networkUp)
 
     switch (state)
     {
+    case NtripState::Paused:
+        event("RTK resumed by the method ladder");
+        // fall through
     case NtripState::NoNetwork:
         waitMs = 1000;
         setState(NtripState::Waiting);

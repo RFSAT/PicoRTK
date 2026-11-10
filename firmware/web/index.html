@@ -413,7 +413,8 @@ async function status(){
       :(curMode==="has"?"no status (PPP?)":"–");
     $("modeNote").textContent=curMode==="has"
       ? "Galileo HAS from the satellites, no internet needed: about 20 cm after it converges (several minutes)."+(hasFix?" HAS solution active.":" Waiting for the HAS solution.")
-      : "NTRIP corrections over Wi-Fi: centimetre level."+(s.galileoHas?" Galileo HAS takes over if they stop.":"");
+      : "NTRIP corrections over Wi-Fi: centimetre level."+(s.galileoHas?" Galileo HAS takes over if they stop.":"")
+        +(s.ladder?` Method ladder${s.ladder.autoPause?"":" (advice only)"}: ${s.ladder.state} - ${s.ladder.reason}`:"");
     kv($("sGnss"),[
       ["Fix",`<span class="pill q${g.quality??0}">${esc(fixLabel)}</span>`],["Corrections from",esc(fixFrom)],
       ["Accuracy (estimated)",acc],["Galileo HAS",esc(hasRow)],

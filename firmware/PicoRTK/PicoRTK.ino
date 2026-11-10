@@ -134,6 +134,7 @@ void setup()
     }
     diagC0 = 103;
     configLoad();
+    ladderConfigure();
     diagC0 = 104;
     {
         RefPoint r; // the reference point is part of the settings
@@ -240,9 +241,31 @@ void loop()
     diagC0 = 3;
     webLoop();
     diagC0 = 4;
-    ntripLoop(up);
+    {
+        NtripStatus ns;
+        ntripStatus(ns);
+        const bool casterConfigured = ns.state != NtripState::Off && ns.state != NtripState::Stopped;
+        ladderSourceAvailable = (up && casterConfigured) || outputsInboundRtcmActive();
+    }
+    // The ladder pauses RTK only when that is switched on in the settings; otherwise it just reports
+    const bool rtkAllowed = !cfg.ladderAutoPause || ladderAllowRtk.load();
+    ntripLoop(up, rtkAllowed);
     diagC0 = 5;
-    outputsLoop(ntripStreaming());
+    outputsLoop(ntripStreaming(), rtkAllowed);
+    {
+        char reason[160];
+        LadderState st;
+        // Logged only when the ladder's state changes (not every fixed/float change), so the event log is not flooded
+        static int lastState = -1;
+        if (ladderTakeChange(reason, sizeof(reason), st) && (int)st != lastState)
+        {
+            lastState = (int)st;
+            char m[220];
+            snprintf(m, sizeof(m), "method ladder%s: %s - %s", cfg.ladderAutoPause ? "" : " (advice only, RTK not paused)",
+                     ladderStateName(st), reason);
+            eventAdd(m);
+        }
+    }
     diagC0 = 6;
     statusLoop();
     logStatus();

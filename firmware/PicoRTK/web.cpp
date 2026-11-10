@@ -7,6 +7,7 @@
 #include "net.h"
 #include "ntrip.h"
 #include "outputs.h"
+#include "receiver.h"
 #include "shared.h"
 #include "util.h"
 #include "web_page.h"
@@ -61,6 +62,21 @@ static void handleStatus()
     d["mode"] = cfg.mode;
     d["galileoHas"] = cfg.galileoHas;
     d["bluetoothName"] = outputsBtName();
+    {
+        static Ladder l; // copied under the receiver's lock
+        getLadder(l);
+        JsonObject lo = d["ladder"].to<JsonObject>();
+        lo["state"] = ladderStateName(l.state());
+        lo["code"] = ladderStateCode(l.state());
+        lo["reason"] = l.reason();
+        lo["autoPause"] = cfg.ladderAutoPause;
+        lo["advisesPause"] = !l.allowRtk();
+        lo["pauses"] = l.pauseCount();
+        if (l.state() == LS_RTK_PAUSED)
+            lo["retryInSec"] = (l.pausedUntilMs() - now) / 1000;
+        if (l.altBest() >= 0)
+            lo["fallbackBestM"] = l.altBest();
+    }
 
     JsonObject w = d["wifi"].to<JsonObject>();
     w["mode"] = netApMode() ? "setup access point" : (netUp() ? "connected" : "searching");
@@ -316,6 +332,7 @@ void webSetup()
             return;
         }
         cfg.mode = m;
+        ladderConfigure();
         if (!configSave())
         {
             server.send(500, "text/plain", "Could not write the settings to flash");

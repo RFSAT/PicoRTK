@@ -37,6 +37,13 @@ struct Config
     //                  "has" = Galileo HAS from the satellites only, NTRIP off (no internet needed)
     String mode = "rtk";
     bool galileoHas = true; // Galileo HAS (PPP) enabled in the receiver; always on in "has" mode
+    // Method ladder (ladder.h). Off by default: it only reports what it would do. With ladderAutoPause on,
+    // RTK that does not perform better than HAS/SBAS for trialSec is paused for pauseSec (doubling, max 1 h).
+    bool ladderAutoPause = false;
+    uint32_t ladderTrialSec = 300;
+    float ladderGoodM = 0.5f;
+    uint32_t ladderPauseSec = 900;
+    bool prfsm = false; // $PRFSM status sentence to Bluetooth/TCP clients after every GGA (off: output unchanged)
 
     // Reference point (surveyed antenna position, e.g. recorded from an RTK fixed solution):
     // the Home page shows each method's actual error against it

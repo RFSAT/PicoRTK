@@ -5,7 +5,8 @@
 void outputsSetup();            // after configLoad(); starts Bluetooth
 void outputsStop();             // before a restart
 void outputsNetworkUp(bool up); // starts/stops the TCP server
-void outputsLoop(bool ntripStreaming);
+void outputsLoop(bool ntripStreaming, bool rtkAllowed = true);
+bool outputsInboundRtcmActive(); // an app sent RTCM in the last 10 s (passed on or not)
 
 struct OutputStatus
 {
